@@ -1,0 +1,26 @@
+<div id="mainScreen" class="screen active">
+  <div class="card">
+    <div class="header">
+      <div class="logo">📦</div>
+      <h1>GM-IMS</h1>
+      <h3>GwangMyeong-elecs<br>Inventory Management System</h3>
+      <p class="subtitle">광명전기 재고 관리 시스템</p>
+      <p class="revision-info" id="revisionInfo" onclick="showRevisionHistory()">
+        <span id="revisionText">Revision 정보 로딩 중...</span>
+      </p>
+    </div>
+    <button class="btn btn-primary" onclick="showSearchMenu()">
+      <span>🔍</span> 검색하기
+    </button>
+    <button class="btn btn-order" onclick="showOrderMain()">
+      <span>📝</span> 주문서 만들기
+    </button>
+    <button class="btn btn-secondary" onclick="showAllItems()">
+      <span>📋</span> 전체 목록 보기
+    </button>
+    <button class="btn btn-guide" onclick="showGuide()">
+      <span>📖</span> 동작 가이드
+    </button>
+  </div>
+</div>
+

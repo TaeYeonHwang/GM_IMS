@@ -1,0 +1,1321 @@
+<script>
+  let allItems = [];
+  let stream = null;
+  let qrStream = null;
+  let orderQRStream = null;
+  let orderItems = [];
+  let currentOrderType = 'b2c';
+
+  function debugLog(m, t) {
+    const b = document.getElementById('debugBox');
+    const l = document.getElementById('debugLogs');
+    b.style.display = 'block';
+    const c = t === 'error' ? 'debug-error' : (t === 'success' ? 'debug-success' : '');
+    const e = document.createElement('div');
+    e.className = 'debug-log ' + c;
+    e.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
+    l.appendChild(e);
+    l.scrollTop = l.scrollHeight;
+    console.log(m);
+  }
+
+  function clearDebugLog() {
+    document.getElementById('debugLogs').innerHTML = '';
+    document.getElementById('debugBox').style.display = 'none';
+  }
+
+  function qrDebugLog(m, t) {
+    const b = document.getElementById('qrDebugBox');
+    const l = document.getElementById('qrDebugLogs');
+    b.style.display = 'block';
+    const c = t === 'error' ? 'debug-error' : (t === 'success' ? 'debug-success' : '');
+    const e = document.createElement('div');
+    e.className = 'debug-log ' + c;
+    e.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
+    l.appendChild(e);
+    l.scrollTop = l.scrollHeight;
+    console.log(m);
+  }
+
+  function clearQRDebugLog() {
+    document.getElementById('qrDebugLogs').innerHTML = '';
+    document.getElementById('qrDebugBox').style.display = 'none';
+  }
+
+  function orderDebugLog(m, t) {
+    const b = document.getElementById('orderDebugBox');
+    const l = document.getElementById('orderDebugLogs');
+    b.style.display = 'block';
+    const c = t === 'error' ? 'debug-error' : (t === 'success' ? 'debug-success' : '');
+    const e = document.createElement('div');
+    e.className = 'debug-log ' + c;
+    e.textContent = '[' + new Date().toLocaleTimeString() + '] ' + m;
+    l.appendChild(e);
+    l.scrollTop = l.scrollHeight;
+    console.log(m);
+  }
+
+  function clearOrderDebugLog() {
+    document.getElementById('orderDebugLogs').innerHTML = '';
+    document.getElementById('orderDebugBox').style.display = 'none';
+  }
+
+
+  function hideAllScreens() {
+    ['mainScreen', 'searchMenuScreen', 'searchScreen', 'qrSearchScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen'].forEach(id => {
+      document.getElementById(id).style.display = 'none';
+      document.getElementById(id).classList.remove('active');
+    });
+  }
+
+  function showMain() {
+    hideAllScreens();
+    const s = document.getElementById('mainScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+  }
+
+  function showSearchMenu() {
+    hideAllScreens();
+    const s = document.getElementById('searchMenuScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+  }
+
+  function showOrderMain() {
+    hideAllScreens();
+    const s = document.getElementById('orderMainScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+    
+    // 디버그 로그 초기화
+    clearOrderDebugLog();
+    orderDebugLog('주문서 메인 화면 로드 시작');
+
+    // 오늘 날짜 표시
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();      
+    orderDebugLog('오늘 날짜: ' + year + '년 ' + month + '월 ' + day + '일');
+
+    document.getElementById('todayDateText').textContent = `${year}년 ${month}월 ${day}일`;
+    
+    // 조회 입력 필드에 오늘 날짜 기본값 설정
+    document.getElementById('searchOrderYear').value = year;
+    document.getElementById('searchOrderMonth').value = month;
+    document.getElementById('searchOrderDay').value = day;
+    
+    // 오늘 생성된 주문서 수 조회
+    const orderDate = year.toString() + month.toString().padStart(2, '0') + day.toString().padStart(2, '0');
+    orderDebugLog('주문 날짜 문자열: ' + orderDate);
+    orderDebugLog('서버에 getNewOrderIndex 요청 중...');
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        orderDebugLog('서버 응답 받음', 'success');
+        orderDebugLog('result.success: ' + result.success);
+        orderDebugLog('result.orderIndex: ' + result.orderIndex);
+        orderDebugLog('result.existingOrders: ' + result.existingOrders);
+
+        if (result.success) {
+          const existingCount = result.existingOrders || 0;
+          const nextIndex = result.orderIndex || 1;
+          orderDebugLog('기존 주문서 개수: ' + existingCount, 'success');
+          orderDebugLog('다음 주문서 번호: ' + nextIndex, 'success');
+
+          document.getElementById('todayOrderCount').textContent = existingCount;
+
+          // 마지막 주문서 번호를 조회 입력 필드에 기본값으로 (없으면 비워둠)
+          if (result.orderIndex > 1) {
+            const lastOrderIndex = nextIndex - 1;
+            orderDebugLog('마지막 주문서 번호: ' + lastOrderIndex);
+            document.getElementById('searchOrderIndex').value = result.orderIndex - 1;
+          } else {
+            orderDebugLog('생성된 주문서 없음');
+            document.getElementById('searchOrderIndex').value = '';
+          }
+        } else {
+          orderDebugLog('서버 응답 실패: ' + result.message, 'error');
+          document.getElementById('todayOrderCount').textContent = '0';
+          document.getElementById('searchOrderIndex').value = '';
+        }
+      })
+      .withFailureHandler(function(error) {
+        orderDebugLog('서버 요청 실패: ' + error, 'error');
+        document.getElementById('todayOrderCount').textContent = '?';
+        console.error('오늘 주문서 수 조회 실패:', error);
+      })
+      .getNewOrderIndex(orderDate);
+  }
+
+  function showNewOrderForm() {
+    hideAllScreens();
+    const s = document.getElementById('orderFormScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    
+    // 오늘 날짜로 설정
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+    
+    const orderDate = year.toString() + month.toString().padStart(2, '0') + day.toString().padStart(2, '0');
+    
+    // 날짜 텍스트 표시
+    document.getElementById('newOrderDateText').textContent = `${year}년 ${month}월 ${day}일`;
+    
+    // 신규 주문서 번호 가져오기
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          document.getElementById('newOrderIndexText').textContent = result.orderIndex;
+          // 내부적으로 사용할 값 저장
+          window.currentOrderDate = orderDate;
+          window.currentOrderIndex = result.orderIndex;
+        }
+      })
+      .getNewOrderIndex(orderDate);
+    
+    // 초기화
+    orderItems = [];
+    document.getElementById('orderItemsBody').innerHTML = '';
+    document.getElementById('orderSearchInput').value = '';
+    document.getElementById('orderMessage').innerHTML = '';
+    currentOrderType = 'b2c';
+    document.querySelector('input[name="orderType"][value="b2c"]').checked = true;
+  }
+
+  function searchOrder() {
+    const year = document.getElementById('searchOrderYear').value;
+    const month = String(document.getElementById('searchOrderMonth').value).padStart(2, '0');  // ✅ String() 추가
+    const day = String(document.getElementById('searchOrderDay').value).padStart(2, '0');  // ✅ String() 추가
+    const orderIndexInput = document.getElementById('searchOrderIndex').value.trim();
+    
+    if (!year || !month || !day) {
+      alert('날짜를 입력해주세요.');
+      return;
+    }
+    
+    const orderDate = year + month + day;
+    
+    // 주문서 번호가 비어있으면 전체 조회
+    if (!orderIndexInput || orderIndexInput === '') {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            hideAllScreens();
+            const s = document.getElementById('orderViewScreen');
+            s.style.display = 'block';
+            s.classList.add('active');
+            displayOrderList(orderDate, result.orderList);
+          } else {
+            alert(result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          alert('주문서 목록 조회 중 오류: ' + error);
+        })
+        .getOrderListByDate(orderDate);
+    } else {
+      // 개별 조회
+      const orderIndex = parseInt(orderIndexInput);
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            hideAllScreens();
+            const s = document.getElementById('orderViewScreen');
+            s.style.display = 'block';
+            s.classList.add('active');
+            displayOrderView(result.orders);
+          } else {
+            alert(result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          alert('주문서 조회 중 오류: ' + error);
+        })
+        .getOrderData(orderDate, orderIndex);
+    }
+  }
+
+  function displayOrderView(orders) {
+    // 주문서 정보 추출
+    const orderSerialNumber = orders[0].serialNumber;
+    const orderDateStr = orders[0].date.toString();
+    const year = orderDateStr.substring(0, 4);
+    const month = orderDateStr.substring(4, 6);
+    const day = orderDateStr.substring(6, 8);
+    const formattedDate = year + '년 ' + parseInt(month) + '월 ' + parseInt(day) + '일';
+
+    // 합계 계산
+    let totalAmount = 0;
+    let totalQty = 0;
+    orders.forEach(function(order) {
+      totalAmount += order.totalCost || 0;
+      totalQty += order.cnt || 0;
+    });
+
+    // 주문 시간 포맷팅
+    const orderTime = orders[0].time || '-';
+    
+    // 주문서 헤더 HTML
+    let headerHTML = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-bottom: 20px;">';
+    headerHTML += '<h2 style="font-size: 45px; margin-bottom: 15px;">📋 주문서 상세 정보</h2>';
+    headerHTML += '<div style="font-size: 32px; line-height: 1.6;">';
+    headerHTML += '<div>📝 주문서 번호: <strong>' + orderSerialNumber + '</strong></div>';
+    headerHTML += '<div>📅 주문 날짜: <strong>' + formattedDate + '</strong></div>';
+    headerHTML += '<div>🕐 주문 시간: <strong>' + orderTime + '</strong></div>';
+    headerHTML += '</div></div>';
+
+    let contentHTML = headerHTML;
+    contentHTML += '<div style="margin: 20px 0;">';
+    contentHTML += '<h3 style="font-size: 35px; color: #667eea; margin-bottom: 15px;">주문 품목 목록</h3>';
+    contentHTML += '</div>';
+    contentHTML += '<div style="overflow-x: auto;">';
+    contentHTML += '<table class="order-table" id="orderViewTable">';
+    contentHTML += '<thead>';
+    contentHTML += '<tr style="border-bottom: none;">';
+    contentHTML += '<th rowspan="2" style="vertical-align: middle; width: 15%;">코드번호</th>';
+    contentHTML += '<th style="padding-bottom: 8px; width: 35%;">품명</th>';
+    contentHTML += '<th style="padding-bottom: 8px; width: 20%;">타입</th>';
+    contentHTML += '<th style="padding-bottom: 8px; width: 15%;">개수</th>';
+    contentHTML += '</tr>';
+    contentHTML += '<tr>';
+    contentHTML += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>';
+    contentHTML += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">가격</th>';
+    contentHTML += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">총가격</th>';
+    contentHTML += '</tr>';
+    contentHTML += '</thead>';
+    contentHTML += '<tbody id="orderViewBody"></tbody>';
+    contentHTML += '<tfoot>';
+    contentHTML += '<tr style="background: #f8f8f8; font-weight: 600; font-size: 28px;">';
+    contentHTML += '<td colspan="6" style="text-align: right; padding: 15px;">합계:</td>';
+    contentHTML += '<td style="color: #667eea; font-size: 32px;">' + totalAmount.toLocaleString() + '원</td>';
+    contentHTML += '</tr>';
+    contentHTML += '</tfoot>';
+    contentHTML += '</table>';
+    contentHTML += '</div>';
+    contentHTML += '<div style="background: #f8f8f8; padding: 20px; border-radius: 15px; margin-top: 20px;">';
+    contentHTML += '<div style="font-size: 32px; line-height: 1.8;">';
+    contentHTML += '<div>💰 총 주문 금액: <strong style="color: #667eea;">' + totalAmount.toLocaleString() + '원</strong></div>';
+    contentHTML += '<div>📦 총 품목 수: <strong>' + orders.length + '개</strong></div>';
+    contentHTML += '<div>🔢 총 수량: <strong>' + totalQty + '개</strong></div>';
+    contentHTML += '</div>';
+    contentHTML += '</div>';
+
+    document.getElementById('orderViewContent').innerHTML = contentHTML;
+
+    const tbody = document.getElementById('orderViewBody');
+    orders.forEach(function(order) {
+      const cost = order.isB2B === 1 ? order.costB2B : order.costB2C;
+
+      // 첫 번째 행
+      const row1 = tbody.insertRow();
+      row1.style.borderBottom = 'none';
+      row1.innerHTML = '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 26px;">' + 
+        order.codeNum + 
+        '</td>' +
+        '<td style="font-size: 26px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px;">' + 
+        order.name + 
+        '</td>' +
+        '<td style="padding: 15px 10px 5px 10px; text-align: center;">' + 
+        (order.isB2B === 1 ? '도' : '소') + 
+        '</td>' +
+        '<td style="vertical-align: middle; font-size: 26px; text-align: center; padding: 15px 10px 5px 10px;">' + 
+        order.cnt + 
+        '</td>';
+      
+      // 두 번째 행
+      const row2 = tbody.insertRow();
+      row2.style.borderBottom = '2px solid #ddd';
+      row2.innerHTML = '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 24px; color: #666;">' + 
+        (order.description || '-') + 
+        '</td>' +
+        '<td style="padding: 5px 15px 15px 15px; text-align: center;">' +
+        '<strong style="color: #667eea; font-size: 26px;">' + cost.toLocaleString() + '원</strong>' +
+        '</td>' +
+        '<td style="padding: 5px 15px 15px 15px; text-align: center;">' +
+        '<strong style="color: #667eea; font-size: 26px;">' + order.totalCost.toLocaleString() + '원</strong>' +
+        '</td>';
+    });
+  }
+
+  function displayOrderList(orderDate, orderList) {
+    const dateStr = orderDate.toString();
+    const year = dateStr.substring(0, 4);
+    const month = dateStr.substring(4, 6);
+    const day = dateStr.substring(6, 8);
+    const formattedDate = `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`;
+    
+    // ✅ 모든 주문서 데이터 한번에 가져오기
+    let loadedCount = 0;
+    const allOrders = [];
+    
+    orderList.forEach(index => {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          loadedCount++;
+          
+          if (result.success) {
+            allOrders.push({
+              index: index,
+              orders: result.orders
+            });
+          }
+          
+          // 모든 주문서 로드 완료
+          if (loadedCount === orderList.length) {
+            // 인덱스 순서대로 정렬
+            allOrders.sort((a, b) => a.index - b.index);
+            displayAllOrders(orderDate, formattedDate, allOrders);
+          }
+        })
+        .withFailureHandler(function(error) {
+          loadedCount++;
+          console.error(`주문서 #${index} 조회 실패:`, error);
+        })
+        .getOrderData(orderDate, index);
+    });
+  }
+
+  function displayAllOrders(orderDate, formattedDate, allOrders) {
+    let totalAmount = 0;
+    let totalItems = 0;
+    let totalQty = 0;
+    
+    // 전체 합계 계산
+    allOrders.forEach(function(orderGroup) {
+      orderGroup.orders.forEach(function(order) {
+        totalAmount += order.totalCost || 0;
+        totalQty += order.cnt || 0;
+      });
+      totalItems += orderGroup.orders.length;
+    });
+    
+    let html = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-bottom: 20px;">';
+    html += '<h2 style="font-size: 45px; margin-bottom: 15px;">📋 전체 주문서 목록</h2>';
+    html += '<div style="font-size: 32px; line-height: 1.6;">';
+    html += '<div>📅 날짜: <strong>' + formattedDate + '</strong></div>';
+    html += '<div>📝 총 주문서 수: <strong>' + allOrders.length + '개</strong></div>';
+    html += '</div></div>';
+    
+    // 각 주문서를 쭉 나열
+    allOrders.forEach(function(orderGroup) {
+      const orderSerialNumber = orderGroup.orders[0].serialNumber;
+      let orderAmount = 0;
+      let orderQty = 0;
+      
+      orderGroup.orders.forEach(function(order) {
+        orderAmount += order.totalCost || 0;
+        orderQty += order.cnt || 0;
+      });
+      
+      // 주문 시간 가져오기
+      const orderTime = orderGroup.orders[0].time || '-';
+
+      html += '<div style="background: #f8f8f8; padding: 20px; border-radius: 15px; margin-bottom: 20px; border-left: 5px solid #667eea;">';
+      html += '<h3 style="font-size: 38px; color: #667eea; margin-bottom: 15px;">';
+      html += '📝 주문서 #' + orderGroup.index + ' (' + orderSerialNumber + ')';
+      html += '</h3>';
+      html += '<div style="font-size: 28px; margin-bottom: 15px; color: #666;">';
+      html += '🕐 주문 시간: <strong>' + orderTime + '</strong> | ';
+      html += '💰 주문서 금액: <strong style="color: #667eea;">' + orderAmount.toLocaleString() + '원</strong> | ';
+      html += '📦 품목 수: <strong>' + orderGroup.orders.length + '개</strong> | ';
+      html += '🔢 수량: <strong>' + orderQty + '개</strong>';
+      html += '</div>';
+      html += '<div style="overflow-x: auto;">';
+      html += '<table class="order-table">';
+      html += '<thead>';
+      html += '<tr style="border-bottom: none;">';
+      html += '<th rowspan="2" style="vertical-align: middle; width: 15%;">코드번호</th>';
+      html += '<th style="padding-bottom: 8px; width: 35%;">품명</th>';
+      html += '<th style="padding-bottom: 8px; width: 20%;">타입</th>';
+      html += '<th style="padding-bottom: 8px; width: 15%;">개수</th>';
+      html += '</tr>';
+      html += '<tr>';
+      html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>';
+      html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">가격</th>';
+      html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">총가격</th>';
+      html += '</tr>';
+      html += '</thead>';
+      html += '<tbody>';
+      
+      orderGroup.orders.forEach(function(order) {
+        const cost = order.isB2B === 1 ? order.costB2B : order.costB2C;
+        
+        // 첫 번째 행
+        html += '<tr style="border-bottom: none;">';
+        html += '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 26px;">';
+        html += order.codeNum;
+        html += '</td>';
+        html += '<td style="font-size: 26px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px;">';
+        html += order.name;
+        html += '</td>';
+        html += '<td style="padding: 15px 10px 5px 10px; text-align: center;">';
+        html += order.isB2B === 1 ? '도' : '소';
+        html += '</td>';
+        html += '<td style="vertical-align: middle; font-size: 26px; text-align: center; padding: 15px 10px 5px 10px;">';
+        html += order.cnt;
+        html += '</td>';
+        html += '</tr>';
+        
+        // 두 번째 행
+        html += '<tr style="border-bottom: 2px solid #ddd;">';
+        html += '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 24px; color: #666;">';
+        html += order.description || '-';
+        html += '</td>';
+        html += '<td style="padding: 5px 15px 15px 15px; text-align: center;">';
+        html += '<strong style="color: #667eea; font-size: 26px;">' + cost.toLocaleString() + '원</strong>';
+        html += '</td>';
+        html += '<td style="padding: 5px 15px 15px 15px; text-align: center;">';
+        html += '<strong style="color: #667eea; font-size: 26px;">' + order.totalCost.toLocaleString() + '원</strong>';
+        html += '</td>';
+        html += '</tr>';
+      });
+      
+      html += '</tbody>';
+      html += '</table>';
+      html += '</div>';
+      html += '</div>';
+    });
+    
+    // 전체 합계
+    html += '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-top: 20px;">';
+    html += '<h3 style="font-size: 38px; margin-bottom: 15px;">📊 전체 합계</h3>';
+    html += '<div style="font-size: 32px; line-height: 1.8;">';
+    html += '<div>💰 총 주문 금액: <strong>' + totalAmount.toLocaleString() + '원</strong></div>';
+    html += '<div>📦 총 품목 수: <strong>' + totalItems + '개</strong></div>';
+    html += '<div>🔢 총 수량: <strong>' + totalQty + '개</strong></div>';
+    html += '</div>';
+    html += '</div>';
+    
+    document.getElementById('orderViewContent').innerHTML = html;
+  }
+
+  function updateOrderType() {
+    const type = document.querySelector('input[name="orderType"]:checked').value;
+    currentOrderType = type;
+    renderOrderItems();
+  }
+
+  function searchItemForOrder() {
+    const codeNum = document.getElementById('orderSearchInput').value.trim();
+    
+    if (!codeNum) {
+      showOrderMessage('코드 번호를 입력해주세요.', 'error');
+      return;
+    }
+    
+    showOrderMessage('검색 중...', 'info');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          addItemToOrder(result.item);
+          document.getElementById('orderSearchInput').value = '';
+        } else {
+          showOrderMessage(result.message, 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showOrderMessage('검색 중 오류: ' + error, 'error');
+      })
+      .searchByCodeNum(codeNum);
+  }
+
+  function addItemToOrder(item) {
+    // 재고 확인
+    if (item.stockNum <= 0) {
+      showOrderMessage('재고가 없습니다: ' + item.name, 'error');
+      return;
+    }
+    
+    // 중복 확인
+    const existingItem = orderItems.find(i => i.codeNum === item.codeNum);
+    
+    if (existingItem) {
+      // 재고 초과 확인
+      if (existingItem.cnt + 1 > item.stockNum) {
+        showOrderMessage('재고가 부족합니다. 현재 재고: ' + item.stockNum, 'error');
+        return;
+      }
+      existingItem.cnt++;
+    } else {
+      orderItems.push({
+        codeNum: item.codeNum,
+        name: item.name,
+        description: item.description,
+        costB2B: item.costB2B,
+        costB2C: item.costB2C,
+        stockNum: item.stockNum,
+        cnt: 1,
+        isB2B: currentOrderType === 'b2b'
+      });
+    }
+    
+    renderOrderItems();
+    showOrderMessage('품목이 추가되었습니다: ' + item.name, 'success');
+  }
+
+  function renderOrderItems() {
+    const tbody = document.getElementById('orderItemsBody');
+    tbody.innerHTML = '';
+    
+    orderItems.forEach((item, index) => {
+      const cost = item.isB2B ? item.costB2B : item.costB2C;
+      
+      // ✅ 첫 번째 행 (코드번호, 품명, 타입, 개수, 삭제)
+      const row1 = tbody.insertRow();
+      row1.style.borderBottom = 'none';
+      row1.innerHTML = `
+        <td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 26px;">
+          ${item.codeNum}
+        </td>
+        <td style="font-size: 26px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px;">
+          ${item.name}
+        </td>
+        <td style="padding: 15px 10px 5px 10px;">
+          <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
+            <label style="font-size: 22px; margin: 0;">
+              <input type="radio" name="itemType${index}" value="b2c" ${!item.isB2B ? 'checked' : ''} 
+                    onchange="updateItemType(${index}, false)" style="width: 18px; height: 18px; vertical-align: middle;"> 소
+            </label>
+            <label style="font-size: 22px; margin: 0;">
+              <input type="radio" name="itemType${index}" value="b2b" ${item.isB2B ? 'checked' : ''} 
+                    onchange="updateItemType(${index}, true)" style="width: 18px; height: 18px; vertical-align: middle;"> 도
+            </label>
+          </div>
+        </td>
+        <td rowspan="2" style="vertical-align: middle;">
+          <div class="qty-control">
+            <button class="qty-btn" onclick="decreaseQty(${index})">-</button>
+            <span class="qty-value">${item.cnt}</span>
+            <button class="qty-btn" onclick="increaseQty(${index})">+</button>
+          </div>
+        </td>
+        <td rowspan="2" style="vertical-align: middle;">
+          <button class="delete-btn" onclick="removeItem(${index})">삭제</button>
+        </td>
+      `;
+      
+      // ✅ 두 번째 행 (설명, 가격)
+      const row2 = tbody.insertRow();
+      row2.style.borderBottom = '2px solid #ddd';
+      row2.innerHTML = `
+        <td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 24px; color: #666;">
+          ${item.description || '-'}
+        </td>
+        <td style="padding: 5px 15px 15px 15px;">
+          <strong style="color: #667eea; font-size: 26px;">${cost.toLocaleString()}원</strong>
+        </td>
+      `;
+    });
+  }
+
+  function updateItemType(index, isB2B) {
+    orderItems[index].isB2B = isB2B;
+    renderOrderItems();
+  }
+
+  function increaseQty(index) {
+    const item = orderItems[index];
+    if (item.cnt >= item.stockNum) {
+      showOrderMessage('재고가 부족합니다. 현재 재고: ' + item.stockNum, 'error');
+      return;
+    }
+    item.cnt++;
+    renderOrderItems();
+  }
+
+  function decreaseQty(index) {
+    const item = orderItems[index];
+    if (item.cnt > 1) {
+      item.cnt--;
+      renderOrderItems();
+    }
+  }
+
+  function removeItem(index) {
+    orderItems.splice(index, 1);
+    renderOrderItems();
+  }
+
+  function submitOrder() {
+    if (orderItems.length === 0) {
+      showOrderMessage('주문할 품목을 추가해주세요.', 'error');
+      return;
+    }
+    
+    // 저장된 날짜와 인덱스 사용
+    const orderDate = window.currentOrderDate;
+    const orderIndex = window.currentOrderIndex;
+    
+    if (!orderDate || !orderIndex) {
+      showOrderMessage('날짜와 주문서 번호를 확인해주세요.', 'error');
+      return;
+    }
+    
+    const orderData = {
+      date: parseInt(orderDate),
+      index: orderIndex,
+      items: orderItems
+    };
+    
+    // ✅ ID로 버튼 직접 참조
+    const submitBtn = document.getElementById('submitOrderBtn');
+    
+    // 원래 내용 저장
+    const originalContent = submitBtn.innerHTML;
+    
+    // 버튼 비활성화
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.6';
+    submitBtn.style.cursor = 'not-allowed';
+    submitBtn.textContent = '⏳ 주문 진행중...';  // textContent 사용
+    
+    showOrderMessage('주문을 처리하는 중...', 'info');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          submitBtn.textContent = '✅ 주문 완료!';
+          submitBtn.style.opacity = '1';
+          showOrderMessage('주문이 완료되었습니다!', 'success');
+          
+          setTimeout(() => {
+            // 주문서 메인으로 돌아가기
+            showOrderMain();
+            
+            // 버튼 재활성화
+            submitBtn.disabled = false;
+            submitBtn.style.cursor = 'pointer';
+            submitBtn.innerHTML = '<span>✅</span> 주문하기';
+          }, 2000);
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = '1';
+          submitBtn.style.cursor = 'pointer';
+          submitBtn.innerHTML = originalContent;
+          showOrderMessage('주문 실패: ' + result.message, 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
+        submitBtn.innerHTML = originalContent;
+        showOrderMessage('주문 처리 중 오류: ' + error, 'error');
+      })
+      .saveOrder(orderData);
+  }
+
+  function showOrderMessage(msg, type) {
+    const msgDiv = document.getElementById('orderMessage');
+    let className = 'alert-info';
+    if (type === 'error') className = 'alert-error';
+    if (type === 'success') className = 'alert-success';
+    
+    msgDiv.innerHTML = '<div class="alert ' + className + '">' + msg + '</div>';
+    
+    if (type === 'success' || type === 'error') {
+      setTimeout(() => {
+        msgDiv.innerHTML = '';
+      }, 3000);
+    }
+  }
+
+  // QR 스캐너 for 주문서
+  function toggleOrderQRScanner() {
+    const sc = document.getElementById('orderQRScannerContainer');
+    const btnText = document.getElementById('orderQRBtnText');
+    const captureBtn = document.getElementById('orderQRCaptureBtn');
+    
+    if (sc.style.display === 'block') {
+      stopOrderQRCamera();
+      btnText.textContent = 'QR 스캔';
+      captureBtn.style.display = 'none';
+    } else {
+      startOrderQRCamera();
+    }
+  }
+
+  async function startOrderQRCamera() {
+    await CameraModule.start('orderQR', {
+      videoElement: document.getElementById('orderQRVideoElement'),
+      containerElement: document.getElementById('orderQRScannerContainer'),
+      buttonTextElement: document.getElementById('orderQRBtnText'),
+      captureButtonElement: document.getElementById('orderQRCaptureBtn'),
+      resultElement: document.getElementById('orderMessage')
+    });
+  }
+
+  function stopOrderQRCamera() {
+    CameraModule.stop('orderQR', {
+      videoElement: document.getElementById('orderQRVideoElement'),
+      containerElement: document.getElementById('orderQRScannerContainer'),
+      captureButtonElement: document.getElementById('orderQRCaptureBtn'),
+      buttonTextElement: document.getElementById('orderQRBtnText')
+    });
+  }
+
+  async function captureOrderQR() {
+    try {
+      const imgData = CameraModule.captureImage(
+        document.getElementById('orderQRVideoElement'),
+        document.getElementById('orderQRCanvas')
+      );
+      
+      showOrderMessage('QR 코드 인식 중...', 'info');
+      
+      if (typeof jsQR === 'undefined') {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+        s.onload = () => {
+          decodeOrderQR(imgData);
+        };
+        s.onerror = () => {
+          showOrderMessage('QR 라이브러리를 로드할 수 없습니다.', 'error');
+        };
+        document.head.appendChild(s);
+      } else {
+        decodeOrderQR(imgData);
+      }
+    } catch (e) {
+      showOrderMessage('QR 코드 인식 중 오류가 발생했습니다.', 'error');
+    }
+  }
+
+  function decodeOrderQR(imgData) {
+    try {
+      const code = jsQR(imgData.data, imgData.width, imgData.height, {inversionAttempts: "dontInvert"});
+      if (code) {
+        document.getElementById('orderSearchInput').value = code.data;
+        stopOrderQRCamera();
+        showOrderMessage('QR 코드 인식 성공: ' + code.data, 'success');
+        setTimeout(() => searchItemForOrder(), 500);
+      } else {
+        showOrderMessage('QR 코드를 인식할 수 없습니다.', 'error');
+      }
+    } catch (e) {
+      showOrderMessage('QR 코드 디코딩 중 오류가 발생했습니다.', 'error');
+    }
+  }
+
+  function showSearch() {
+    hideAllScreens();
+    const s = document.getElementById('searchScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    document.getElementById('barcodeInput').value = '';
+    document.getElementById('searchResult').innerHTML = '';
+    clearDebugLog();
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+  }
+
+  function showQRSearch() {
+    hideAllScreens();
+    const s = document.getElementById('qrSearchScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    const inputElement = document.getElementById('qrInput');
+    inputElement.value = '';
+    document.getElementById('qrSearchResult').innerHTML = '';
+    clearQRDebugLog();
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+    
+    setTimeout(() => {
+      inputElement.focus();
+    }, 100);
+  }
+
+  function showAllItems() {
+    hideAllScreens();
+    const s = document.getElementById('listScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    loadAllItems();
+  }
+
+  function showGuide() {
+    hideAllScreens();
+    const s = document.getElementById('guideScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+    loadGuideImage();
+  }
+
+  function loadGuideImage() {
+    var container = document.getElementById('guideImageContainer');
+    var imageId = '1WVFlAw3IdN3fI26m6cbinUnGdRwghp4y';
+    
+    var urls = [
+      'https://drive.google.com/uc?export=download&id=' + imageId,
+      'https://lh3.googleusercontent.com/d/' + imageId + '=s0',
+      'https://drive.google.com/uc?id=' + imageId + '&export=download',
+      'https://drive.google.com/uc?export=view&id=' + imageId
+    ];
+    
+    var currentUrlIndex = 0;
+    
+    function tryNextUrl() {
+      if (currentUrlIndex >= urls.length) {
+        container.innerHTML = '<div class="alert alert-error">이미지를 불러올 수 없습니다.<br><br><strong>해결 방법:</strong><br>1. Google Drive에서 이미지 우클릭<br>2. \'공유\' → \'링크 복사\'<br>3. 링크 권한: "링크가 있는 모든 사용자"<br>4. 파일 ID 확인: ' + imageId + '<br><br><a href="https://drive.google.com/file/d/' + imageId + '/view" target="_blank" style="color: #c33; text-decoration: underline; font-size: 24px;">📂 Google Drive에서 이미지 열기</a></div>';
+        return;
+      }
+      
+      var img = new Image();
+      var currentUrl = urls[currentUrlIndex];
+      
+      console.log('이미지 로드 시도 (' + (currentUrlIndex + 1) + '/' + urls.length + '):', currentUrl);
+      
+      img.onload = function() {
+        console.log('✓ 이미지 로드 성공:', currentUrl);
+        container.innerHTML = '<img src="' + currentUrl + '" alt="동작 가이드" class="guide-image">';
+      };
+      
+      img.onerror = function() {
+        console.log('✗ 이미지 로드 실패 (' + (currentUrlIndex + 1) + '/' + urls.length + '):', currentUrl);
+        currentUrlIndex++;
+        setTimeout(tryNextUrl, 500);
+      };
+      
+      img.src = currentUrl;
+    }
+    
+    tryNextUrl();
+  }
+
+  let userIPCache = null;
+
+  async function fetchUserIP() {
+    if (userIPCache) {
+      return userIPCache;
+    }
+    
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      userIPCache = data.ip;
+      console.log('✓ 사용자 IP 획득:', userIPCache);
+      return userIPCache;
+    } catch (error) {
+      console.log('✗ IP 획득 실패, 대체 방법 시도...');
+      try {
+        const response2 = await fetch('https://jsonip.com');
+        const data2 = await response2.json();
+        userIPCache = data2.ip;
+        console.log('✓ 사용자 IP 획득 (대체):', userIPCache);
+        return userIPCache;
+      } catch (error2) {
+        console.log('✗ IP 획득 완전 실패');
+        return 'Unknown';
+      }
+    }
+  }
+
+  window.addEventListener('load', function() {
+    fetchUserIP();
+    loadLatestRevision();
+  });
+
+  function searchBarcode() {
+    const c = document.getElementById('barcodeInput').value.trim();
+    if (!c) {
+      showError('searchResult', '코드 번호를 입력해주세요.');
+      return;
+    }
+    showLoading('searchResult');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        displaySearchResult(result);
+        if (result.success) {
+          logCodeNumAccess(c);
+        }
+      })
+      .withFailureHandler(e => showError('searchResult', '검색 중 오류: ' + e))
+      .searchByCodeNum(c);
+  }
+  
+  async function logCodeNumAccess(codeNum) {
+    const userIP = await fetchUserIP();
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          console.log('✓ 접근 로그 기록 완료 - IP:', userIP, '코드번호:', codeNum);
+        } else {
+          console.log('✗ 로그 기록 실패:', result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        console.log('✗ 로그 기록 오류:', error);
+      })
+      .logAccess(codeNum, userIP);
+  }
+
+  function displaySearchResult(r) {
+    const c = document.getElementById('searchResult');
+    if (r.success) {
+      const i = r.item;
+      
+      let html = '<div class="result-card"><h3>📦 검색 결과</h3>';
+      html += '<div class="result-item"><span class="result-label">일련번호:</span><span class="result-value">' + (i.serialNum || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">품명:</span><span class="result-value">' + (i.name || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">설명:</span><span class="result-value">' + (i.description || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">코드번호:</span><span class="result-value">' + (i.codeNum || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">도매가:</span><span class="result-value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">소매가:</span><span class="result-value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">재고:</span><span class="result-value">' + (i.stockNum ?? '-') + '</span></div>';
+      html += '</div>';
+      
+      c.innerHTML = html;
+    } else {
+      showError('searchResult', r.message);
+    }
+  }
+
+  function loadAllItems() {
+    showLoading('itemList');
+    google.script.run.withSuccessHandler(displayAllItems).withFailureHandler(e => showError('itemList', '목록 로드 오류: ' + e)).getAllItems();
+  }
+
+  function displayAllItems(r) {
+    const c = document.getElementById('itemList');
+    if (r.success) {
+      allItems = r.items;
+      if (allItems.length === 0) {
+        c.innerHTML = '<div class="alert alert-info">등록된 아이템이 없습니다.</div>';
+        return;
+      }
+      renderItems(allItems);
+    } else {
+      showError('itemList', r.message);
+    }
+  }
+
+  function renderItems(items) {
+    const c = document.getElementById('itemList');
+    if (items.length === 0) {
+      c.innerHTML = '<div class="alert alert-info">검색 결과가 없습니다.</div>';
+      return;
+    }
+    
+    let html = '<div class="item-list">';
+    items.forEach(function(i) {
+      html += '<div class="item-card">';
+      html += '<h4>🏷️ ' + (i.name || '-') + '</h4>';
+      html += '<div class="item-info"><strong>일련번호:</strong> ' + (i.serialNum || '-') + '</div>';
+      html += '<div class="item-info"><strong>설명:</strong> ' + (i.description || '-') + '</div>';
+      html += '<div class="item-info"><strong>코드번호:</strong> ' + (i.codeNum || '-') + '</div>';
+      html += '<div class="item-info"><strong>도매가:</strong> ' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</div>';
+      html += '<div class="item-info"><strong>소매가:</strong> ' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</div>';
+      html += '<div class="item-info"><strong>재고:</strong> ' + (i.stockNum ?? '-') + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    
+    c.innerHTML = html;
+  }
+
+  function filterItems() {
+    const f = document.getElementById('filterInput').value.toLowerCase();
+    const filtered = allItems.filter(i => i.name.toLowerCase().includes(f) || i.codeNum.toString().includes(f) || i.description.toLowerCase().includes(f) || i.serialNum.toString().includes(f));
+    renderItems(filtered);
+  }
+
+  async function startCameraScan() {
+    clearDebugLog();
+    debugLog('카메라 스캔 시작');
+    
+    await CameraModule.start('barcode', {
+      videoElement: document.getElementById('videoElement'),
+      containerElement: document.getElementById('scannerContainer'),
+      buttonTextElement: document.getElementById('cameraBtnText'),
+      captureButtonElement: document.getElementById('captureBtn'),
+      resultElement: document.getElementById('searchResult')
+    });
+  }
+
+  async function captureAndDecode() {
+    debugLog('바코드 캡처 시작');
+    
+    try {
+      // ✅ 이 부분이 CameraModule.captureImage()로 교체됨
+      const imageData = CameraModule.captureImage(
+        document.getElementById('videoElement'),
+        document.getElementById('canvas')
+      );
+      debugLog('✓ 이미지 캡처 완료', 'success');
+      const img = c.toDataURL('image/png');
+      showLoading('searchResult');
+      debugLog('Quagga 바코드 인식 시작...');
+      
+      Quagga.decodeSingle({src: img, numOfWorkers: 0, locate: true, decoder: {readers: ['code_39_reader', 'code_39_vin_reader', 'ean_8_reader', 'ean_reader', 'code_128_reader', 'codabar_reader', 'upc_reader', 'upc_e_reader', 'i2of5_reader']}}, function(r) {
+        if (r && r.codeResult) {
+          debugLog('✓ 바코드 인식 성공: ' + r.codeResult.code, 'success');
+          document.getElementById('barcodeInput').value = r.codeResult.code;
+          stopCamera();
+          document.getElementById('searchResult').innerHTML = '<div class="alert alert-info">✅ 바코드 인식 성공: <strong>' + r.codeResult.code + '</strong></div>';
+          setTimeout(() => searchBarcode(), 500);
+        } else {
+          debugLog('✗ 바코드를 찾을 수 없음', 'error');
+          showError('searchResult', '바코드를 인식할 수 없습니다.<br>• 바코드를 녹색 영역에 맞춰주세요<br>• 조명을 밝게 해주세요');
+        }
+      });
+    } catch (e) {
+      debugLog('✗ 오류: ' + e.message, 'error');
+      showError('searchResult', '바코드 인식 중 오류가 발생했습니다.');
+    }
+  }
+
+  function stopCamera() {
+    debugLog('카메라 끄기');
+    CameraModule.stop('barcode', {
+      videoElement: document.getElementById('videoElement'),
+      containerElement: document.getElementById('scannerContainer'),
+      captureButtonElement: document.getElementById('captureBtn'),
+      buttonTextElement: document.getElementById('cameraBtnText')
+    });
+  }
+
+  function searchQR() {
+    const inputElement = document.getElementById('qrInput');
+    const q = inputElement.value.trim();
+    
+    if (!q) {
+      showError('qrSearchResult', 'QR 코드 번호를 입력해주세요.');
+      inputElement.focus();
+      return;
+    }
+    
+    showLoading('qrSearchResult');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        displayQRSearchResult(result);
+        inputElement.value = '';
+        inputElement.focus();
+        
+        if (result.success) {
+          logCodeNumAccess(q);
+        }
+      })
+      .withFailureHandler(function(e) {
+        showError('qrSearchResult', '검색 중 오류: ' + e);
+        inputElement.value = '';
+        inputElement.focus();
+      })
+      .searchByCodeNum(q);
+  }
+
+  function displayQRSearchResult(r) {
+    const c = document.getElementById('qrSearchResult');
+    if (r.success) {
+      const i = r.item;
+      
+      let html = '<div class="result-card"><h3>📦 검색 결과</h3>';
+      html += '<div class="result-item"><span class="result-label">일련번호:</span><span class="result-value">' + (i.serialNum || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">품명:</span><span class="result-value">' + (i.name || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">설명:</span><span class="result-value">' + (i.description || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">코드번호:</span><span class="result-value">' + (i.codeNum || '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">도매가:</span><span class="result-value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">소매가:</span><span class="result-value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span></div>';
+      html += '<div class="result-item"><span class="result-label">재고:</span><span class="result-value">' + (i.stockNum ?? '-') + '</span></div>';
+      html += '</div>';
+      
+      c.innerHTML = html;
+    } else {
+      showError('qrSearchResult', r.message);
+    }
+  }
+
+  async function startQRScan() {
+    clearQRDebugLog();
+    qrDebugLog('QR 스캔 시작');
+    
+    await CameraModule.start('qr', {
+      videoElement: document.getElementById('qrVideoElement'),
+      containerElement: document.getElementById('qrScannerContainer'),
+      buttonTextElement: document.getElementById('qrBtnText'),
+      captureButtonElement: document.getElementById('qrCaptureBtn'),
+      resultElement: document.getElementById('qrSearchResult')
+    });
+  }
+
+  async function captureAndDecodeQR() {
+    qrDebugLog('QR 코드 캡처 시작');
+
+    try {
+      const imgData = CameraModule.captureImage(
+        document.getElementById('qrVideoElement'),
+        document.getElementById('qrCanvas')
+      );
+      
+      qrDebugLog('✓ 이미지 캡처 완료', 'success');
+      showLoading('qrSearchResult');
+      qrDebugLog('jsQR로 QR 코드 인식 시작...');
+      qrDebugLog('ImageData 추출 완료');
+      if (typeof jsQR === 'undefined') {
+        qrDebugLog('jsQR 라이브러리 로딩 중...');
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+        s.onload = () => {
+          qrDebugLog('jsQR 라이브러리 로드 완료');
+          decodeQRFromImageData(imgData);
+        };
+        s.onerror = () => {
+          qrDebugLog('✗ jsQR 라이브러리 로드 실패', 'error');
+          showError('qrSearchResult', 'QR 라이브러리를 로드할 수 없습니다.');
+        };
+        document.head.appendChild(s);
+      } else {
+        decodeQRFromImageData(imgData);
+      }
+    } catch (e) {
+      qrDebugLog('✗ 오류: ' + e.message, 'error');
+      showError('qrSearchResult', 'QR 코드 인식 중 오류가 발생했습니다.');
+    }
+  }
+
+  function decodeQRFromImageData(imgData) {
+    qrDebugLog('QR 코드 디코딩 시도...');
+    const inputElement = document.getElementById('qrInput');
+    
+    try {
+      const code = jsQR(imgData.data, imgData.width, imgData.height, {inversionAttempts: "dontInvert"});
+      if (code) {
+        qrDebugLog('✓ QR 코드 인식 성공: ' + code.data, 'success');
+        inputElement.value = code.data;
+        stopQRCamera();
+        document.getElementById('qrSearchResult').innerHTML = '<div class="alert alert-info">✅ QR 코드 인식 성공: <strong>' + code.data + '</strong></div>';
+        qrDebugLog('자동 검색 시작...');
+        setTimeout(() => {
+          searchQR();
+        }, 500);
+      } else {
+        qrDebugLog('✗ QR 코드를 찾을 수 없음', 'error');
+        showError('qrSearchResult', 'QR 코드를 인식할 수 없습니다.<br>• QR 코드를 녹색 영역에 맞춰주세요<br>• 조명을 밝게 해주세요');
+        inputElement.focus();
+      }
+    } catch (e) {
+      qrDebugLog('✗ QR 디코딩 오류: ' + e.message, 'error');
+      showError('qrSearchResult', 'QR 코드 디코딩 중 오류가 발생했습니다.');
+      inputElement.focus();
+    }
+  }
+
+  function stopQRCamera() {
+    qrDebugLog('카메라 끄기');
+    CameraModule.stop('qr', {
+      videoElement: document.getElementById('qrVideoElement'),
+      containerElement: document.getElementById('qrScannerContainer'),
+      captureButtonElement: document.getElementById('qrCaptureBtn'),
+      buttonTextElement: document.getElementById('qrBtnText')
+    });
+  }
+
+  function showLoading(id) {
+    document.getElementById(id).innerHTML = '<div class="loading"><div class="spinner"></div><div>로딩 중...</div></div>';
+  }
+
+  function showError(id, msg) {
+    document.getElementById(id).innerHTML = '<div class="alert alert-error">' + msg + '</div>';
+  }
+
+  function loadLatestRevision() {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        const revisionText = document.getElementById('revisionText');
+        if (result.success) {
+          revisionText.innerHTML = `Revision <strong>${result.revision}</strong> (last update <strong>${result.date}</strong>)`;
+        } else {
+          revisionText.textContent = 'Revision 정보 없음';
+          console.log('Revision 로드 실패:', result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        document.getElementById('revisionText').textContent = 'Revision 로드 실패';
+        console.log('Revision 로드 오류:', error);
+      })
+      .getLatestRevision();
+  }
+
+  function showRevisionHistory() {
+    hideAllScreens();
+    const s = document.getElementById('revisionHistoryScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    loadRevisionHistory();
+  }
+
+  function loadRevisionHistory() {
+    showLoading('revisionHistoryContent');
+    google.script.run
+      .withSuccessHandler(displayRevisionHistory)
+      .withFailureHandler(function(error) {
+        showError('revisionHistoryContent', 'Revision History 로드 오류: ' + error);
+      })
+      .getRevisionHistory();
+  }
+
+  function displayRevisionHistory(result) {
+    const container = document.getElementById('revisionHistoryContent');
+    
+    if (!result.success) {
+      showError('revisionHistoryContent', result.message);
+      return;
+    }
+
+    if (result.revisions.length === 0) {
+      container.innerHTML = '<div class="alert alert-info">Revision 데이터가 없습니다.</div>';
+      return;
+    }
+
+    let tableHTML = '<div style="overflow-x: auto;"><table class="revision-table"><thead><tr>';
+    
+    result.headers.forEach(header => {
+      tableHTML += `<th>${header}</th>`;
+    });
+    tableHTML += '</tr></thead><tbody>';
+
+    result.revisions.forEach(revision => {
+      tableHTML += '<tr>';
+      result.headers.forEach(header => {
+        const value = revision[header] !== undefined && revision[header] !== null ? revision[header] : '-';
+        tableHTML += `<td>${value}</td>`;
+      });
+      tableHTML += '</tr>';
+    });
+
+    tableHTML += '</tbody></table></div>';
+    container.innerHTML = tableHTML;
+  }
+
+  function handleQRInputEnter(event) {
+    if (event.key === 'Enter' || event.keyCode === 13) {
+      event.preventDefault();
+      searchQR();
+    }
+  }
+  
+</script>

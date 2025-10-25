@@ -1,0 +1,85 @@
+<script>
+  // ===== 여기부터 추가 =====
+const CameraModule = {
+  streams: {
+    barcode: null,
+    qr: null,
+    orderQR: null
+  },
+  
+  async start(type, config) {
+    const { videoElement, containerElement, buttonTextElement, captureButtonElement, resultElement } = config;
+    
+    if (containerElement.style.display === 'block') {
+      this.stop(type, config);
+      return;
+    }
+    
+    if (resultElement) {
+      resultElement.innerHTML = '<div class="alert alert-info">카메라를 시작하는 중...</div>';
+    }
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      
+      this.streams[type] = stream;
+      videoElement.srcObject = stream;
+      containerElement.style.display = 'block';
+      if (captureButtonElement) captureButtonElement.style.display = 'flex';
+      
+      videoElement.onloadedmetadata = () => {
+        videoElement.play().then(() => {
+          if (buttonTextElement) buttonTextElement.textContent = '카메라 끄기';
+          if (resultElement) {
+            const scanType = type === 'barcode' ? '바코드' : 'QR 코드';
+            resultElement.innerHTML = `<div class="alert alert-info">📸 ${scanType}를 녹색 영역에 맞추고 캡처 버튼을 눌러주세요.</div>`;
+          }
+        }).catch(() => {
+          if (resultElement) resultElement.innerHTML = '<div class="alert alert-error">비디오 재생 실패</div>';
+          this.stop(type, config);
+        });
+      };
+    } catch (error) {
+      if (resultElement) {
+        resultElement.innerHTML = `<div class="alert alert-error">카메라를 시작할 수 없습니다: ${error.message}</div>`;
+      }
+      this.stop(type, config);
+    }
+  },
+  
+  stop(type, config) {
+    const stream = this.streams[type];
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      this.streams[type] = null;
+    }
+    
+    const { videoElement, containerElement, captureButtonElement, buttonTextElement } = config;
+    videoElement.srcObject = null;
+    containerElement.style.display = 'none';
+    if (captureButtonElement) captureButtonElement.style.display = 'none';
+    if (buttonTextElement) buttonTextElement.textContent = '카메라로 스캔';
+  },
+  
+  captureImage(videoElement, canvasElement) {
+    const canvas = canvasElement;
+    const video = videoElement;
+    const ctx = canvas.getContext('2d');
+    
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      throw new Error('비디오가 준비되지 않았습니다');
+    }
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  }
+};
+// ===== 여기까지 추가 =====
+
+</script>

@@ -1,0 +1,77 @@
+<div id="orderFormScreen" class="screen">
+  <div class="card">
+    <button class="btn btn-home" onclick="showOrderMain()">← 주문서 메인으로</button>
+    <div class="header">
+      <div class="logo">✨</div>
+      <h1>주문서 신규 생성</h1>
+      <div style="font-size: 32px; color: #666; margin-top: 10px;">
+        📅 <strong id="newOrderDateText">-</strong> | 📋 주문서 #<strong id="newOrderIndexText">-</strong>
+      </div>
+    </div>
+
+    <div id="orderFormContent">
+      <!-- 기존 주문서 작성 폼 내용 그대로 -->
+      <div class="order-type-selector">
+        <label style="font-size: 35px; font-weight: 600;">주문 타입</label>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="orderType" value="b2c" checked onchange="updateOrderType()"> 소매 (B2C)
+          </label>
+          <label>
+            <input type="radio" name="orderType" value="b2b" onchange="updateOrderType()"> 도매 (B2B)
+          </label>
+        </div>
+      </div>
+
+      <div class="search-section">
+        <label style="font-size: 35px; font-weight: 600;">품목 검색</label>
+        <div class="input-group" style="margin-top: 15px;">
+          <input type="text" id="orderSearchInput" placeholder="코드 번호를 입력하세요" style="font-size: 30px;">
+        </div>
+        <div class="search-buttons">
+          <button class="btn btn-primary btn-small" onclick="searchItemForOrder()">검색</button>
+          <button class="btn btn-secondary btn-small" onclick="toggleOrderQRScanner()">
+            <span id="orderQRBtnText">QR 스캔</span>
+          </button>
+        </div>
+        
+        <div id="orderQRScannerContainer">
+          <video id="orderQRVideoElement" autoplay playsinline></video>
+          <div class="scanner-overlay qr-overlay"></div>
+          <div class="scanner-guide">QR 코드를 이 영역에 맞춰주세요</div>
+        </div>
+        <button class="btn btn-primary btn-small" id="orderQRCaptureBtn" onclick="captureOrderQR()" style="display:none;">📸 QR 캡처</button>
+        <canvas id="orderQRCanvas"></canvas>
+      </div>
+
+      <div id="orderSearchResult"></div>
+
+      <div style="overflow-x: auto;">
+        <table class="order-table" id="orderItemsTable">
+          <thead>
+            <tr style="border-bottom: none;">
+              <th rowspan="2" style="vertical-align: middle; width: 12%;">코드번호</th>
+              <th style="padding-bottom: 8px; width: 30%;">품명</th>
+              <th style="padding-bottom: 8px; width: 20%;">타입</th>
+              <th rowspan="2" style="vertical-align: middle; width: 15%;">개수</th>
+              <th rowspan="2" style="vertical-align: middle; width: 10%;">삭제</th>
+            </tr>
+            <tr>
+              <th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>
+              <th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">가격</th>
+            </tr>
+          </thead>
+          <tbody id="orderItemsBody">
+          </tbody>
+        </table>
+      </div>
+
+      <button id="submitOrderBtn" class="btn btn-order" onclick="submitOrder()" style="margin-top: 20px;">
+        <span>✅</span> 주문하기
+      </button>
+    </div>
+
+    <div id="orderMessage"></div>
+  </div>
+</div>
+

@@ -1,0 +1,32 @@
+<div id="searchScreen" class="screen">
+  <div class="card">
+    <button class="btn btn-home" onclick="showSearchMenu()">← 검색 메뉴로</button>
+    <div class="header">
+      <div class="logo">🔍</div>
+      <h1>바코드 검색</h1>
+    </div>
+    <div class="input-group">
+      <label for="barcodeInput">코드 번호</label>
+      <input type="text" id="barcodeInput" size=160 style="font-size:40pt" placeholder="코드 번호를 입력하세요">
+    </div>
+    <button class="btn btn-secondary" onclick="startCameraScan()">
+      <span>📷</span> <span id="cameraBtnText">카메라로 스캔</span>
+    </button>
+    <div id="scannerContainer">
+      <video id="videoElement" autoplay playsinline></video>
+      <div class="scanner-overlay"></div>
+      <div class="scanner-guide">바코드를 이 영역에 맞춰주세요</div>
+    </div>
+    <button class="btn btn-primary" id="captureBtn" onclick="captureAndDecode()" style="display:none;">📸 바코드 캡처하기</button>
+    <canvas id="canvas"></canvas>
+    <button class="btn btn-primary" onclick="searchBarcode()">
+      <span>🔎</span> 검색하기
+    </button>
+    <div id="searchResult"></div>
+    <div id="debugBox" class="debug-box" style="display:none;">
+      <strong>🔍 디버그 로그:</strong>
+      <div id="debugLogs"></div>
+    </div>
+  </div>
+</div>
+

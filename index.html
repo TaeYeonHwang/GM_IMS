@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바코드 스캐너</title>
+  
+  <!-- 공통 스타일 -->
+  <?!= include('styles'); ?>
+</head>
+<body>
+  <div class="container">
+    <!-- 메인 화면 -->
+    <?!= include('mainScreen'); ?>
+    
+    <!-- 검색 메뉴 -->
+    <?!= include('searchMenuScreen'); ?>
+    
+    <!-- 바코드 검색 화면 -->
+    <?!= include('searchScreen'); ?>
+    
+    <!-- QR 검색 화면 -->
+    <?!= include('qrSearchScreen'); ?>
+    
+    <!-- 주문서 메인 화면 -->
+    <?!= include('orderMainScreen'); ?>
+    
+    <!-- 주문서 작성 화면 -->
+    <?!= include('orderFormScreen'); ?>
+    
+    <!-- 주문서 조회 화면 -->
+    <?!= include('orderViewScreen'); ?>
+    
+    <!-- 전체 목록 화면 -->
+    <?!= include('listScreen'); ?>
+    
+    <!-- 가이드 화면 -->
+    <?!= include('guideScreen'); ?>
+    
+    <!-- Revision History 화면 -->
+    <?!= include('revisionHistoryScreen'); ?>
+  </div>
+
+  <!-- 외부 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+  
+  <!-- 카메라 모듈 -->
+  <?!= include('cameraModule'); ?>
+  
+  <!-- 공통 스크립트 -->
+  <?!= include('scripts'); ?>
+</body>
+</html>
