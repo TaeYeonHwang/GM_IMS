@@ -865,43 +865,54 @@
 
   function loadGuideImage() {
     var container = document.getElementById('guideImageContainer');
-    var imageId = '1WVFlAw3IdN3fI26m6cbinUnGdRwghp4y';
-    
-    var urls = [
-      'https://drive.google.com/uc?export=download&id=' + imageId,
-      'https://lh3.googleusercontent.com/d/' + imageId + '=s0',
-      'https://drive.google.com/uc?id=' + imageId + '&export=download',
-      'https://drive.google.com/uc?export=view&id=' + imageId
-    ];
-    
-    var currentUrlIndex = 0;
-    
-    function tryNextUrl() {
-      if (currentUrlIndex >= urls.length) {
-        container.innerHTML = '<div class="alert alert-error">이미지를 불러올 수 없습니다.<br><br><strong>해결 방법:</strong><br>1. Google Drive에서 이미지 우클릭<br>2. \'공유\' → \'링크 복사\'<br>3. 링크 권한: "링크가 있는 모든 사용자"<br>4. 파일 ID 확인: ' + imageId + '<br><br><a href="https://drive.google.com/file/d/' + imageId + '/view" target="_blank" style="color: #c33; text-decoration: underline; font-size: 24px;">📂 Google Drive에서 이미지 열기</a></div>';
-        return;
-      }
-      
-      var img = new Image();
-      var currentUrl = urls[currentUrlIndex];
-      
-      console.log('이미지 로드 시도 (' + (currentUrlIndex + 1) + '/' + urls.length + '):', currentUrl);
-      
-      img.onload = function() {
-        console.log('✓ 이미지 로드 성공:', currentUrl);
-        container.innerHTML = '<img src="' + currentUrl + '" alt="동작 가이드" class="guide-image">';
-      };
-      
-      img.onerror = function() {
-        console.log('✗ 이미지 로드 실패 (' + (currentUrlIndex + 1) + '/' + urls.length + '):', currentUrl);
-        currentUrlIndex++;
-        setTimeout(tryNextUrl, 500);
-      };
-      
-      img.src = currentUrl;
-    }
-    
-    tryNextUrl();
+    // 서버에서 GUIDE_IMAGE_ID 가져오기
+    google.script.run
+      .withSuccessHandler(function(imageId) {
+        if (!imageId) {
+          container.innerHTML = '<div class="alert alert-error">가이드 이미지 ID가 설정되지 않았습니다.<br><br>스크립트 속성에 GUIDE_IMAGE_ID를 설정해주세요.</div>';
+          return;
+        }
+        
+        var urls = [
+          'https://drive.google.com/uc?export=download&id=' + imageId,
+          'https://lh3.googleusercontent.com/d/' + imageId + '=s0',
+          'https://drive.google.com/uc?id=' + imageId + '&export=download',
+          'https://drive.google.com/uc?export=view&id=' + imageId
+        ];
+        
+        var currentUrlIndex = 0;
+        
+        function tryNextUrl() {
+          if (currentUrlIndex >= urls.length) {
+            container.innerHTML = '<div class="alert alert-error">이미지를 불러올 수 없습니다.<br><br><strong>해결 방법:</strong><br>1. Google Drive에서 이미지 우클릭<br>2. \'공유\' → \'링크 복사\'<br>3. 링크 권한: "링크가 있는 모든 사용자"<br>4. 파일 ID 확인: ' + imageId + '<br><br><a href="https://drive.google.com/file/d/' + imageId + '/view" target="_blank" style="color: #c33; text-decoration: underline; font-size: 24px;">📂 Google Drive에서 이미지 열기</a></div>';
+            return;
+          }
+          
+          var img = new Image();
+          var currentUrl = urls[currentUrlIndex];
+          
+          console.log('이미지 로드 시도 (' + (currentUrlIndex + 1) + '/' + urls.length + '):', currentUrl);
+          
+          img.onload = function() {
+            console.log('✓ 이미지 로드 성공:', currentUrl);
+            container.innerHTML = '<img src="' + currentUrl + '" alt="동작 가이드" class="guide-image">';
+          };
+          
+          img.onerror = function() {
+            console.log('✗ 이미지 로드 실패 (' + (currentUrlIndex + 1) + '/' + urls.length + '):', currentUrl);
+            currentUrlIndex++;
+            setTimeout(tryNextUrl, 500);
+          };
+          
+          img.src = currentUrl;
+        }
+        
+        tryNextUrl();
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="alert alert-error">이미지 ID를 가져오는 중 오류가 발생했습니다: ' + error + '</div>';
+      })
+      .getGuideImageId();
   }
 
   let userIPCache = null;
