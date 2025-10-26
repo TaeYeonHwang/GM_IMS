@@ -1,4 +1,4 @@
-// 구글 시트 설정값 가져오기
+// 구글시트 설정 값 가져오기.
 // Code.gs
 function getConfig() {
   const scriptProperties = PropertiesService.getScriptProperties();
@@ -14,7 +14,7 @@ const SHEET_NAME = 'ItemInfo';
 const LOG_SHEET_NAME = 'AccessLog';
 const PURCHASE_ORDER_SHEET_NAME = 'PurchaseOrder';
 
-// ✅ HTML 파일 include 함수 추가
+// HTML 파일 include 함수.
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
@@ -36,11 +36,11 @@ function getGuideImageId() {
 function doGet() {
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
-    .setTitle('바코드 스캐너')
+    .setTitle('바코드 스캔 재고 관리 시스템')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// 접근 로그 기록 함수
+// 접근 로그 기록.
 function logAccess(codeNum, userIP) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
