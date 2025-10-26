@@ -4,7 +4,7 @@
     <div class="header">
       <div class="logo">✨</div>
       <h1>주문서 신규 생성</h1>
-      <div style="font-size: 32px; color: #666; margin-top: 10px;">
+      <div class="order-form-info">
         📅 <strong id="newOrderDateText">-</strong> | 📋 주문서 #<strong id="newOrderIndexText">-</strong>
       </div>
     </div>
@@ -12,7 +12,7 @@
     <div id="orderFormContent">
       <!-- 기존 주문서 작성 폼 내용 그대로 -->
       <div class="order-type-selector">
-        <label style="font-size: 35px; font-weight: 600;">주문 타입</label>
+        <label class="order-section-label">주문 타입</label>
         <div class="radio-group">
           <label>
             <input type="radio" name="orderType" value="b2c" checked onchange="updateOrderType()"> 소매 (B2C)
@@ -24,9 +24,9 @@
       </div>
 
       <div class="search-section">
-        <label style="font-size: 35px; font-weight: 600;">품목 검색</label>
+        <label class="order-section-label">품목 검색</label>
         <div class="input-group" style="margin-top: 15px;">
-          <input type="text" id="orderSearchInput" placeholder="코드 번호를 입력하세요" style="font-size: 30px;">
+          <input type="text" id="orderSearchInput" placeholder="코드 번호를 입력하세요">
         </div>
         <div class="search-buttons">
           <button class="btn btn-primary btn-small" onclick="searchItemForOrder()">검색</button>
@@ -66,7 +66,7 @@
         </table>
       </div>
 
-      <button id="submitOrderBtn" class="btn btn-order" onclick="submitOrder()" style="margin-top: 20px;">
+      <button id="submitOrderBtn" class="btn btn-order" onclick="submitOrder()">
         <span>✅</span> 주문하기
       </button>
     </div>

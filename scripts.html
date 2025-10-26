@@ -287,10 +287,10 @@
     contentHTML += '<table class="order-table" id="orderViewTable">';
     contentHTML += '<thead>';
     contentHTML += '<tr style="border-bottom: none;">';
-    contentHTML += '<th rowspan="2" style="vertical-align: middle; width: 15%;">코드번호</th>';
-    contentHTML += '<th style="padding-bottom: 8px; width: 35%;">품명</th>';
+    contentHTML += '<th rowspan="2" style="vertical-align: middle; width: 20%;">코드번호</th>';
+    contentHTML += '<th style="padding-bottom: 8px; width: 40%;">품명</th>';
     contentHTML += '<th style="padding-bottom: 8px; width: 20%;">타입</th>';
-    contentHTML += '<th style="padding-bottom: 8px; width: 15%;">개수</th>';
+    contentHTML += '<th style="padding-bottom: 8px; width: 20%;">개수</th>';
     contentHTML += '</tr>';
     contentHTML += '<tr>';
     contentHTML += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>';
@@ -301,8 +301,9 @@
     contentHTML += '<tbody id="orderViewBody"></tbody>';
     contentHTML += '<tfoot>';
     contentHTML += '<tr style="background: #f8f8f8; font-weight: 600; font-size: 28px;">';
-    contentHTML += '<td colspan="6" style="text-align: right; padding: 15px;">합계:</td>';
-    contentHTML += '<td style="color: #667eea; font-size: 32px;">' + totalAmount.toLocaleString() + '원</td>';
+    contentHTML += '<td colspan="7" style="text-align: right; padding: 15px;">';
+    contentHTML += '합계: <strong style="color: #667eea; font-size: 32px;">' + totalAmount.toLocaleString() + '원</strong>';
+    contentHTML += '</td>';
     contentHTML += '</tr>';
     contentHTML += '</tfoot>';
     contentHTML += '</table>';

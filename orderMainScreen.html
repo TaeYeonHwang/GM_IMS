@@ -4,39 +4,39 @@
     <div class="header">
       <div class="logo">📝</div>
       <h1>주문서 만들기</h1>
-      <div id="todayOrderInfo" style="font-size: 32px; color: #666; margin-top: 15px; line-height: 1.8;">
+      <div id="todayOrderInfo" class="today-order-info">
         <div>📅 오늘: <strong id="todayDateText">-</strong></div>
-        <div>📋 오늘 생성된 주문서: <strong id="todayOrderCount" style="color: #667eea;">-</strong>개</div>
+        <div>📋 오늘 생성된 주문서: <strong id="todayOrderCount" class="order-count-highlight">-</strong>개</div>
       </div>
     </div>
     
     <!-- 신규 생성 버튼 (크게) -->
-    <button class="btn btn-primary" onclick="showNewOrderForm()" style="min-height: 180px;">
+    <button class="btn btn-primary" onclick="showNewOrderForm()">
       <span>✨</span> 주문서 신규 생성
     </button>
 
     <!-- 조회 영역 -->
-    <div style="background: #f8f8f8; padding: 25px; border-radius: 15px; margin-top: 20px;">
-      <h3 style="font-size: 35px; color: #667eea; margin-bottom: 20px;">📋 주문서 조회</h3>
+    <div class="order-search-section">
+      <h3 class="order-search-title">📋 주문서 조회</h3>
       <div class="order-header">
         <div class="input-group" style="margin: 0;">
-          <label style="font-size: 30px;">년도</label>
-          <input type="number" id="searchOrderYear" style="font-size: 30px; padding: 15px;">
+          <label class="order-search-label">년도</label>
+          <input type="number" id="searchOrderYear" class="order-search-input">
         </div>
         <div class="input-group" style="margin: 0;">
-          <label style="font-size: 30px;">월</label>
-          <input type="number" id="searchOrderMonth" min="1" max="12" style="font-size: 30px; padding: 15px;">
+          <label class="order-search-label">월</label>
+          <input type="number" id="searchOrderMonth" min="1" max="12" class="order-search-input">
         </div>
         <div class="input-group" style="margin: 0;">
-          <label style="font-size: 30px;">일</label>
-          <input type="number" id="searchOrderDay" min="1" max="31" style="font-size: 30px; padding: 15px;">
+          <label class="order-search-label">일</label>
+          <input type="number" id="searchOrderDay" min="1" max="31" class="order-search-input">
         </div>
         <div class="input-group" style="margin: 0;">
-          <label style="font-size: 30px;">주문서 번호</label>
-          <input type="number" id="searchOrderIndex" min="0" max="9999" placeholder="전체 조회는 비워두세요" style="font-size: 30px; padding: 15px;">
+          <label class="order-search-label">주문서 번호</label>
+          <input type="number" id="searchOrderIndex" min="0" max="9999" placeholder="전체 조회는 비워두세요" class="order-search-input">
         </div>
       </div>
-      <button class="btn btn-secondary btn-small" onclick="searchOrder()" style="margin-top: 15px; width: 100%;">
+      <button class="btn btn-secondary btn-small" onclick="searchOrder()" style="width: 100%;">
         🔍 조회하기
       </button>
 
