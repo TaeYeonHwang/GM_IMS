@@ -5,6 +5,78 @@
   let orderQRStream = null;
   let orderItems = [];
   let currentOrderType = 'b2c';
+  let isNavigating = false; // Browser history navigation support
+
+  // Handle browser back button
+  window.addEventListener('popstate', function(event) {
+    if (event.state && event.state.screen) {
+      isNavigating = true;
+      const screenName = event.state.screen;
+      
+      // Hide all screens
+      hideAllScreens();
+      
+      // Show the appropriate screen
+      const screen = document.getElementById(screenName);
+      if (screen) {
+        screen.style.display = 'block';
+        screen.classList.add('active');
+      }
+      
+      // Stop cameras
+      stopCamera();
+      stopQRCamera();
+      stopOrderQRCamera();
+      
+      // Special handling for certain screens
+      if (screenName === 'listScreen') {
+        loadAllItems();
+      } else if (screenName === 'guideScreen') {
+        loadGuideImage();
+      } else if (screenName === 'orderMainScreen') {
+        // Reload order main screen data
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth() + 1;
+        const day = today.getDate();
+        const orderDate = year.toString() + month.toString().padStart(2, '0') + day.toString().padStart(2, '0');
+        
+        document.getElementById('todayDateText').textContent = `${year}년 ${month}월 ${day}일`;
+        document.getElementById('searchOrderYear').value = year;
+        document.getElementById('searchOrderMonth').value = month;
+        document.getElementById('searchOrderDay').value = day;
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.success) {
+              document.getElementById('todayOrderCount').textContent = result.existingOrders || 0;
+              if (result.orderIndex > 1) {
+                document.getElementById('searchOrderIndex').value = result.orderIndex - 1;
+              } else {
+                document.getElementById('searchOrderIndex').value = '';
+              }
+            }
+          })
+          .getNewOrderIndex(orderDate);
+      } else if (screenName === 'orderFormScreen') {
+        // Keep current order form state
+      } else if (screenName === 'qrSearchScreen') {
+        const inputElement = document.getElementById('qrInput');
+        setTimeout(() => {
+          inputElement.focus();
+        }, 100);
+      }
+      
+      isNavigating = false;
+    }
+  });
+
+  // Helper function to navigate with history
+  function navigateToScreen(screenId) {
+    if (!isNavigating) {
+      history.pushState({ screen: screenId }, '', '#' + screenId);
+    }
+  }
 
   function debugLog(m, t) {
     const b = document.getElementById('debugBox');
@@ -75,6 +147,7 @@
     stopCamera();
     stopQRCamera();
     stopOrderQRCamera();
+    navigateToScreen('mainScreen');
   }
 
   function showInventoryMenu() {
@@ -85,6 +158,7 @@
     stopCamera();
     stopQRCamera();
     stopOrderQRCamera();
+    navigateToScreen('inventoryMenuScreen');
   }
 
   function showOrderMenu() {
@@ -105,6 +179,7 @@
     stopCamera();
     stopQRCamera();
     stopOrderQRCamera();
+    navigateToScreen('searchMenuScreen');
   }
 
   function showOrderMain() {
@@ -175,6 +250,8 @@
         console.error('오늘 주문서 수 조회 실패:', error);
       })
       .getNewOrderIndex(orderDate);
+
+      navigateToScreen('orderMainScreen');
   }
 
   function showNewOrderForm() {
@@ -218,6 +295,8 @@
     setTimeout(() => {
       document.getElementById('orderSearchInput').focus();
     }, 100);
+
+    navigateToScreen('orderFormScreen');
   }
 
   function handleOrderSearchEnter(event) {
@@ -250,6 +329,7 @@
             s.style.display = 'block';
             s.classList.add('active');
             displayOrderList(orderDate, result.orderList);
+            navigateToScreen('orderViewScreen');
           } else {
             alert(result.message);
           }
@@ -270,6 +350,7 @@
             s.style.display = 'block';
             s.classList.add('active');
             displayOrderView(result.orders);
+            navigateToScreen('orderViewScreen');
           } else {
             alert(result.message);
           }
@@ -648,7 +729,14 @@
         <td rowspan="2" style="vertical-align: middle;">
           <div class="qty-control">
             <button class="qty-btn" onclick="decreaseQty(${index})">-</button>
-            <span class="qty-value">${item.cnt}</span>
+            <input type="number" 
+              class="qty-input" 
+              value="${item.cnt}" 
+              min="1" 
+              max="${item.stockNum}"
+              onchange="updateQty(${index}, this.value)"
+              onclick="this.select()"
+              style="width: 60px; text-align: center; font-size: 22px; font-weight: 600; border: 1px solid #ddd; border-radius: 4px; padding: 4px;">
             <button class="qty-btn" onclick="increaseQty(${index})">+</button>
           </div>
         </td>
@@ -704,6 +792,36 @@
     }
 
     // Keep focus on search input
+    setTimeout(() => {
+      document.getElementById('orderSearchInput').focus();
+    }, 100);
+  }
+
+  function updateQty(index, newValue) {
+    const item = orderItems[index];
+    const qty = parseInt(newValue);
+    
+    // Validate input
+    if (isNaN(qty) || qty < 1) {
+      showOrderMessage('수량은 1 이상이어야 합니다.', 'error');
+      renderOrderItems();
+      setTimeout(() => {
+        document.getElementById('orderSearchInput').focus();
+      }, 100);
+      return;
+    }
+    
+    if (qty > item.stockNum) {
+      showOrderMessage('재고가 부족합니다. 현재 재고: ' + item.stockNum + '개', 'error');
+      renderOrderItems();
+      setTimeout(() => {
+        document.getElementById('orderSearchInput').focus();
+      }, 100);
+      return;
+    }
+    
+    item.cnt = qty;
+    renderOrderItems();
     setTimeout(() => {
       document.getElementById('orderSearchInput').focus();
     }, 100);
@@ -804,7 +922,7 @@
     if (type === 'success' || type === 'error') {
       setTimeout(() => {
         msgDiv.innerHTML = '';
-      }, 3000);
+      }, 5000);
     }
   }
 
@@ -896,6 +1014,7 @@
     stopCamera();
     stopQRCamera();
     stopOrderQRCamera();
+    navigateToScreen('searchScreen');
   }
 
   function showQRSearch() {
@@ -914,6 +1033,8 @@
     setTimeout(() => {
       inputElement.focus();
     }, 100);
+
+    navigateToScreen('qrSearchScreen');
   }
 
   function showAllItems() {
@@ -922,6 +1043,7 @@
     s.style.display = 'block';
     s.classList.add('active');
     loadAllItems();
+    navigateToScreen('listScreen');
   }
 
   function showGuide() {
@@ -933,6 +1055,7 @@
     stopQRCamera();
     stopOrderQRCamera();
     loadGuideImage();
+    navigateToScreen('guideScreen');
   }
 
   function loadGuideImage() {
@@ -1018,6 +1141,8 @@
   window.addEventListener('load', function() {
     fetchUserIP();
     loadLatestRevision();
+    // Set initial history state
+    history.replaceState({ screen: 'mainScreen' }, '', '#mainScreen');
   });
 
   function searchBarcode() {
@@ -1398,6 +1523,7 @@
     s.style.display = 'block';
     s.classList.add('active');
     loadRevisionHistory();
+    navigateToScreen('revisionHistoryScreen');
   }
 
   function loadRevisionHistory() {

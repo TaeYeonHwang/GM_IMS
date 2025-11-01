@@ -2,14 +2,14 @@
   <div class="card">
     <button class="btn btn-home" onclick="showOrderMain()">← 주문서 메인으로</button>
     <div class="header">
-      <h1><span class="logo">✨</span> 주문서 신규 생성</h1>
+      <h1>주문서 신규 생성</h1>
       <div class="order-form-info">
-        📅 <strong id="newOrderDateText">-</strong> | 📋 주문서 #<strong id="newOrderIndexText">-</strong>
+        📅 <strong id="newOrderDateText">-</strong> | 주문서 #<strong id="newOrderIndexText">-</strong>
       </div>
     </div>
 
     <div id="orderFormContent">
-      <!-- 기존 주문서 작성 폼 내용 그대로 -->
+      <!-- 주문 타입 선택 -->
       <div class="order-type-selector">
         <label class="order-section-label">주문 타입</label>
         <div class="radio-group">
@@ -22,14 +22,15 @@
         </div>
       </div>
 
+      <!-- 품목 검색 -->
       <div class="search-section">
         <label class="order-section-label">품목 검색</label>
         <div class="input-group" style="margin-top: 15px;">
-          <input type="text" id="orderSearchInput" placeholder="코드 번호를 입력하세요" onkeypress="handleOrderSearchEnter(event)">
+          <input type="text" id="orderSearchInput" style="font-size:40pt" placeholder="코드 번호를 입력하세요" onkeypress="handleOrderSearchEnter(event)">
         </div>
         <div class="search-buttons">
           <button class="btn btn-primary btn-small" onclick="searchItemForOrder()">검색</button>
-          <button class="btn btn-secondary btn-small" onclick="toggleOrderQRScanner()">
+          <button class="btn btn-primary btn-small" onclick="toggleOrderQRScanner()">
             <span id="orderQRBtnText">QR 스캔</span>
           </button>
         </div>
@@ -45,6 +46,10 @@
 
       <div id="orderSearchResult"></div>
 
+      <!-- 메시지 -->
+      <div id="orderMessage"></div>
+
+      <!-- 주문서 테이블 -->
       <div style="overflow-x: auto;">
         <table class="order-table" id="orderItemsTable">
           <thead>
@@ -70,7 +75,6 @@
       </button>
     </div>
 
-    <div id="orderMessage"></div>
   </div>
 </div>
 
