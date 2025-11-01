@@ -467,24 +467,99 @@
     margin: clamp(15px, 2vw, 20px) 0;
   }
 
-  .item-card {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
-    padding: clamp(15px, 2.5vw, 25px);
-    border-radius: clamp(10px, 1.5vw, 15px);
-    margin-bottom: clamp(12px, 1.8vw, 18px);
-    box-shadow: 0 5px 15px rgba(245, 87, 108, 0.3);
+  .item-card-new {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  .item-card h4 {
-    font-size: clamp(28px, 5vw, 60px);
-    margin-bottom: clamp(8px, 1.2vw, 12px);
+  .item-card-new h4 {
+    font-size: 32px;
+    font-weight: 700;
+    color: #111;
+    margin: 0;
+    flex: 1;
   }
 
-  .item-info {
-    font-size: clamp(20px, 3.5vw, 50px);
-    opacity: 0.95;
-    margin: clamp(8px, 1vw, 10px) 0;
+  .item-card-new .card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .item-card-new .stock-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-left: 8px;
+  }
+
+  .stock-badge.sufficient {
+    background-color: #dcfce7;
+    color: #15803d;
+  }
+
+  .stock-badge.normal {
+    background-color: #fef3c7;
+    color: #a16207;
+  }
+
+  .stock-badge.low {
+    background-color: #ffedd5;
+    color: #c2410c;
+  }
+
+  .stock-badge.out {
+    background-color: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .item-card-new .description {
+    color: #666;
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+
+  .item-card-new .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    font-size: 26px;
+  }
+
+  .item-card-new .info-grid .label {
+    color: #666;
+  }
+
+  .item-card-new .info-grid .value {
+    font-weight: 600;
+    color: #111;
+  }
+
+  .item-card-new .info-grid .value.code {
+    font-family: monospace;
+  }
+
+  .item-card-new .info-grid .stock-value.sufficient {
+    color: #16a34a;
+  }
+
+  .item-card-new .info-grid .stock-value.normal {
+    color: #ca8a04;
+  }
+
+  .item-card-new .info-grid .stock-value.low {
+    color: #ea580c;
+  }
+
+  .item-card-new .info-grid .stock-value.out {
+    color: #dc2626;
   }
 
   .alert {

@@ -60,9 +60,8 @@
     document.getElementById('orderDebugBox').style.display = 'none';
   }
 
-
   function hideAllScreens() {
-    ['mainScreen', 'searchMenuScreen', 'searchScreen', 'qrSearchScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen'].forEach(id => {
+    ['mainScreen', 'inventoryMenuScreen', 'searchMenuScreen', 'searchScreen', 'qrSearchScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen'].forEach(id => {
       document.getElementById(id).style.display = 'none';
       document.getElementById(id).classList.remove('active');
     });
@@ -71,6 +70,26 @@
   function showMain() {
     hideAllScreens();
     const s = document.getElementById('mainScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+  }
+
+  function showInventoryMenu() {
+    hideAllScreens();
+    const s = document.getElementById('inventoryMenuScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+  }
+
+  function showOrderMenu() {
+    hideAllScreens();
+    const s = document.getElementById('orderMenuScreen');
     s.style.display = 'block';
     s.classList.add('active');
     stopCamera();
@@ -194,6 +213,18 @@
     document.getElementById('orderMessage').innerHTML = '';
     currentOrderType = 'b2c';
     document.querySelector('input[name="orderType"][value="b2c"]').checked = true;
+
+    // Focus on search input after a short delay
+    setTimeout(() => {
+      document.getElementById('orderSearchInput').focus();
+    }, 100);
+  }
+
+  function handleOrderSearchEnter(event) {
+    if (event.key === 'Enter' || event.keyCode === 13) {
+      event.preventDefault();
+      searchItemForOrder();
+    }
   }
 
   function searchOrder() {
@@ -274,9 +305,9 @@
     let headerHTML = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-bottom: 20px;">';
     headerHTML += '<h2 style="font-size: 45px; margin-bottom: 15px;">📋 주문서 상세 정보</h2>';
     headerHTML += '<div style="font-size: 32px; line-height: 1.6;">';
-    headerHTML += '<div>📝 주문서 번호: <strong>' + orderSerialNumber + '</strong></div>';
-    headerHTML += '<div>📅 주문 날짜: <strong>' + formattedDate + '</strong></div>';
-    headerHTML += '<div>🕐 주문 시간: <strong>' + orderTime + '</strong></div>';
+    headerHTML += '<div> 주문서 번호: <strong>' + orderSerialNumber + '</strong></div>';
+    headerHTML += '<div> 주문 날짜: <strong>' + formattedDate + '</strong></div>';
+    headerHTML += '<div> 주문 시간: <strong>' + orderTime + '</strong></div>';
     headerHTML += '</div></div>';
 
     let contentHTML = headerHTML;
@@ -310,9 +341,9 @@
     contentHTML += '</div>';
     contentHTML += '<div style="background: #f8f8f8; padding: 20px; border-radius: 15px; margin-top: 20px;">';
     contentHTML += '<div style="font-size: 32px; line-height: 1.8;">';
-    contentHTML += '<div>💰 총 주문 금액: <strong style="color: #667eea;">' + totalAmount.toLocaleString() + '원</strong></div>';
-    contentHTML += '<div>📦 총 품목 수: <strong>' + orders.length + '개</strong></div>';
-    contentHTML += '<div>🔢 총 수량: <strong>' + totalQty + '개</strong></div>';
+    contentHTML += '<div> 총 주문 금액: <strong style="color: #667eea;">' + totalAmount.toLocaleString() + '원</strong></div>';
+    contentHTML += '<div> 총 품목 수: <strong>' + orders.length + '개</strong></div>';
+    contentHTML += '<div> 총 수량: <strong>' + totalQty + '개</strong></div>';
     contentHTML += '</div>';
     contentHTML += '</div>';
 
@@ -526,12 +557,27 @@
         if (result.success) {
           addItemToOrder(result.item);
           document.getElementById('orderSearchInput').value = '';
+          
+          // Keep focus on search input
+          setTimeout(() => {
+            document.getElementById('orderSearchInput').focus();
+          }, 100);
         } else {
           showOrderMessage(result.message, 'error');
+
+          // Keep focus on search input
+          setTimeout(() => {
+            document.getElementById('orderSearchInput').focus();
+          }, 100);
         }
       })
       .withFailureHandler(function(error) {
         showOrderMessage('검색 중 오류: ' + error, 'error');
+
+        // Keep focus on search input
+        setTimeout(() => {
+          document.getElementById('orderSearchInput').focus();
+        }, 100);
       })
       .searchByCodeNum(codeNum);
   }
@@ -628,6 +674,11 @@
   function updateItemType(index, isB2B) {
     orderItems[index].isB2B = isB2B;
     renderOrderItems();
+
+    // Keep focus on search input
+    setTimeout(() => {
+      document.getElementById('orderSearchInput').focus();
+    }, 100);
   }
 
   function increaseQty(index) {
@@ -638,6 +689,11 @@
     }
     item.cnt++;
     renderOrderItems();
+
+    // Keep focus on search input
+    setTimeout(() => {
+      document.getElementById('orderSearchInput').focus();
+    }, 100);
   }
 
   function decreaseQty(index) {
@@ -646,11 +702,21 @@
       item.cnt--;
       renderOrderItems();
     }
+
+    // Keep focus on search input
+    setTimeout(() => {
+      document.getElementById('orderSearchInput').focus();
+    }, 100);
   }
 
   function removeItem(index) {
     orderItems.splice(index, 1);
     renderOrderItems();
+
+    // Keep focus on search input
+    setTimeout(() => {
+      document.getElementById('orderSearchInput').focus();
+    }, 100);
   }
 
   function submitOrder() {
@@ -710,6 +776,11 @@
           submitBtn.style.cursor = 'pointer';
           submitBtn.innerHTML = originalContent;
           showOrderMessage('주문 실패: ' + result.message, 'error');
+
+          // Keep focus on search input after error
+          setTimeout(() => {
+            document.getElementById('orderSearchInput').focus();
+          }, 100);
         }
       })
       .withFailureHandler(function(error) {
@@ -1032,17 +1103,66 @@
       return;
     }
     
+    // Helper function to get stock status
+    function getStockClass(stock) {
+      if (stock === 0) return 'out';
+      if (stock < 10) return 'low';
+      if (stock < 50) return 'normal';
+      return 'sufficient';
+    }
+    
+    function getStockText(stock) {
+      if (stock === 0) return '품절';
+      if (stock < 10) return '부족';
+      if (stock < 50) return '보통';
+      return '충분';
+    }
+    
     let html = '<div class="item-list">';
     items.forEach(function(i) {
-      html += '<div class="item-card">';
-      html += '<h4>🏷️ ' + (i.name || '-') + '</h4>';
-      html += '<div class="item-info"><strong>일련번호:</strong> ' + (i.serialNum || '-') + '</div>';
-      html += '<div class="item-info"><strong>설명:</strong> ' + (i.description || '-') + '</div>';
-      html += '<div class="item-info"><strong>코드번호:</strong> ' + (i.codeNum || '-') + '</div>';
-      html += '<div class="item-info"><strong>도매가:</strong> ' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</div>';
-      html += '<div class="item-info"><strong>소매가:</strong> ' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</div>';
-      html += '<div class="item-info"><strong>재고:</strong> ' + (i.stockNum ?? '-') + '</div>';
+      const stockClass = getStockClass(i.stockNum ?? 0);
+      const stockText = getStockText(i.stockNum ?? 0);
+      
+      html += '<div class="item-card-new">';
+      
+      // Header with name and stock badge
+      html += '<div class="card-header">';
+      html += '<h4>' + (i.name || '-') + '</h4>';
+      html += '<span class="stock-badge ' + stockClass + '">' + stockText + '</span>';
       html += '</div>';
+      
+      // Description
+      html += '<p class="description">' + (i.description || '-') + '</p>';
+      
+      // Info grid (2x2)
+      html += '<div class="info-grid">';
+      
+      // Code number
+      html += '<div>';
+      html += '<span class="label">코드번호:</span> ';
+      html += '<span class="value code">' + (i.codeNum || '-') + '</span>';
+      html += '</div>';
+      
+      // Stock
+      html += '<div>';
+      html += '<span class="label">재고:</span> ';
+      html += '<span class="value stock-value ' + stockClass + '">' + (i.stockNum ?? '-') + '개</span>';
+      html += '</div>';
+      
+      // B2B price
+      html += '<div>';
+      html += '<span class="label">도매가:</span> ';
+      html += '<span class="value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      // B2C price
+      html += '<div>';
+      html += '<span class="label">소매가:</span> ';
+      html += '<span class="value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      html += '</div>'; // End info-grid
+      html += '</div>'; // End item-card-new
     });
     html += '</div>';
     

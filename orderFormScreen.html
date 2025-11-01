@@ -2,8 +2,7 @@
   <div class="card">
     <button class="btn btn-home" onclick="showOrderMain()">← 주문서 메인으로</button>
     <div class="header">
-      <div class="logo">✨</div>
-      <h1>주문서 신규 생성</h1>
+      <h1><span class="logo">✨</span> 주문서 신규 생성</h1>
       <div class="order-form-info">
         📅 <strong id="newOrderDateText">-</strong> | 📋 주문서 #<strong id="newOrderIndexText">-</strong>
       </div>
@@ -26,7 +25,7 @@
       <div class="search-section">
         <label class="order-section-label">품목 검색</label>
         <div class="input-group" style="margin-top: 15px;">
-          <input type="text" id="orderSearchInput" placeholder="코드 번호를 입력하세요">
+          <input type="text" id="orderSearchInput" placeholder="코드 번호를 입력하세요" onkeypress="handleOrderSearchEnter(event)">
         </div>
         <div class="search-buttons">
           <button class="btn btn-primary btn-small" onclick="searchItemForOrder()">검색</button>
