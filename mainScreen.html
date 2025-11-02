@@ -1,17 +1,63 @@
 <div id="mainScreen" class="screen active">
-  <div class="card">
-    <div class="header">
-      <div class="logo">📦</div>
-      <h1>GM-IMS</h1>
-      <h3>GwangMyeong-elecs<br>Inventory Management System</h3>
-      <p class="subtitle">광명전기 재고 관리 시스템</p>
-      <p class="revision-info" id="revisionInfo" onclick="showRevisionHistory()">
-        <span id="revisionText">Revision 정보 로딩 중...</span>
-      </p>
+  <div class="container">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div class="brand">
+        <div class="brand-logo">📦</div>
+        <div class="brand-text">
+          <h1>GM-IMS</h1>
+          <p>GwangMyeong-elecs Invertory Management System</p>
+          <p>광명전기 재고 관리 시스템</p>
+        </div>
+      </div>
+      <div class="version-tag" onclick="showRevisionHistory()">
+        <span id="revisionText">Rev 정보 로딩 중...</span>
+      </div>
     </div>
-    <button class="btn btn-primary" onclick="showInventoryMenu()">재고 관리</button>
-    <button class="btn btn-order" onclick="showOrderMain()">주문 관리</button>
-    <button class="btn btn-guide" onclick="showGuide()">동작 가이드</button>
+
+    <!-- Welcome Section -->
+    <div class="welcome-section">
+      <h2 class="welcome-title">시스템 메뉴</h2>
+      <p class="welcome-subtitle">원하는 메뉴를 선택하여 작업을 시작하세요</p>
+    </div>
+
+    <!-- Feature Cards Grid -->
+    <div class="feature-grid">
+      <!-- Inventory Card -->
+      <div class="feature-card feature-card-inventory" onclick="showInventoryMenu()">
+        <div class="feature-card-line"></div>
+        <div class="feature-icon-wrapper">
+          <span class="feature-icon">📦</span>
+        </div>
+        <h3 class="feature-title">재고 관리</h3>
+        <p class="feature-description">바코드/QR 스캔으로 빠른 재고 조회 및 전체 목록 확인</p>
+        <span class="feature-arrow">→</span>
+      </div>
+
+      <!-- Order Card -->
+      <div class="feature-card feature-card-order" onclick="showOrderMain()">
+        <div class="feature-card-line"></div>
+        <div class="feature-icon-wrapper">
+          <span class="feature-icon">📝</span>
+        </div>
+        <h3 class="feature-title">주문 관리</h3>
+        <p class="feature-description">신규 주문서 생성 및 과거 주문 내역 조회</p>
+        <span class="feature-arrow">→</span>
+      </div>
+
+      <!-- Guide Card -->
+      <div class="feature-card feature-card-guide" onclick="showGuide()">
+        <div class="feature-card-line"></div>
+        <div class="feature-icon-wrapper">
+          <span class="feature-icon">📖</span>
+        </div>
+        <h3 class="feature-title">동작 가이드</h3>
+        <p class="feature-description">시스템 사용 방법 및 기능 설명 확인</p>
+        <span class="feature-arrow">→</span>
+      </div>
+    </div>
+
   </div>
+
 </div>
 
