@@ -1185,16 +1185,63 @@
     const c = document.getElementById('searchResult');
     if (r.success) {
       const i = r.item;
-      
-      let html = '<div class="result-card"><h3>📦 검색 결과</h3>';
-      html += '<div class="result-item"><span class="result-label">일련번호:</span><span class="result-value">' + (i.serialNum || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">품명:</span><span class="result-value">' + (i.name || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">설명:</span><span class="result-value">' + (i.description || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">코드번호:</span><span class="result-value">' + (i.codeNum || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">도매가:</span><span class="result-value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">소매가:</span><span class="result-value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">재고:</span><span class="result-value">' + (i.stockNum ?? '-') + '</span></div>';
+
+      // Helper function to get stock status
+      function getStockClass(stock) {
+        if (stock === 0) return 'out';
+        if (stock < 10) return 'low';
+        if (stock < 50) return 'normal';
+        return 'sufficient';
+      }
+
+      function getStockText(stock) {
+        if (stock === 0) return '품절';
+        if (stock < 10) return '부족';
+        if (stock < 50) return '보통';
+        return '충분';
+      }
+
+      const stockClass = getStockClass(i.stockNum ?? 0);
+      const stockText = getStockText(i.stockNum ?? 0);
+
+      // Header with name and stock badge
+      html += '<div class="card-header">';
+      html += '<h4>' + (i.name || '-') + '</h4>';
+      html += '<span class="stock-badge ' + stockClass + '">' + stockText + '</span>';
       html += '</div>';
+      
+      // Description
+      html += '<p class="description">' + (i.description || '-') + '</p>';
+      
+      // Info grid (2x2)
+      html += '<div class="info-grid">';
+      
+      // Code number
+      html += '<div>';
+      html += '<span class="label">코드번호:</span> ';
+      html += '<span class="value code">' + (i.codeNum || '-') + '</span>';
+      html += '</div>';
+      
+      // Stock
+      html += '<div>';
+      html += '<span class="label">재고:</span> ';
+      html += '<span class="value stock-value ' + stockClass + '">' + (i.stockNum ?? '-') + '개</span>';
+      html += '</div>';
+      
+      // B2B price
+      html += '<div>';
+      html += '<span class="label">도매가:</span> ';
+      html += '<span class="value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      // B2C price
+      html += '<div>';
+      html += '<span class="label">소매가:</span> ';
+      html += '<span class="value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      html += '</div>'; // End info-grid
+      html += '</div>'; // End item-card-new
       
       c.innerHTML = html;
     } else {
@@ -1390,15 +1437,64 @@
     if (r.success) {
       const i = r.item;
       
-      let html = '<div class="result-card"><h3>📦 검색 결과</h3>';
-      html += '<div class="result-item"><span class="result-label">일련번호:</span><span class="result-value">' + (i.serialNum || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">품명:</span><span class="result-value">' + (i.name || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">설명:</span><span class="result-value">' + (i.description || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">코드번호:</span><span class="result-value">' + (i.codeNum || '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">도매가:</span><span class="result-value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">소매가:</span><span class="result-value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span></div>';
-      html += '<div class="result-item"><span class="result-label">재고:</span><span class="result-value">' + (i.stockNum ?? '-') + '</span></div>';
+      // Helper function to get stock status
+      function getStockClass(stock) {
+        if (stock === 0) return 'out';
+        if (stock < 10) return 'low';
+        if (stock < 50) return 'normal';
+        return 'sufficient';
+      }
+      
+      function getStockText(stock) {
+        if (stock === 0) return '품절';
+        if (stock < 10) return '부족';
+        if (stock < 50) return '보통';
+        return '충분';
+      }
+
+      const stockClass = getStockClass(i.stockNum ?? 0);
+      const stockText = getStockText(i.stockNum ?? 0);
+      
+      let html = '<div class="item-card-new">';
+
+      // Header with name and stock badge
+      html += '<div class="card-header">';
+      html += '<h4>' + (i.name || '-') + '</h4>';
+      html += '<span class="stock-badge ' + stockClass + '">' + stockText + '</span>';
       html += '</div>';
+      
+      // Description
+      html += '<p class="description">' + (i.description || '-') + '</p>';
+      
+      // Info grid (2x2)
+      html += '<div class="info-grid">';
+      
+      // Code number
+      html += '<div>';
+      html += '<span class="label">코드번호:</span> ';
+      html += '<span class="value code">' + (i.codeNum || '-') + '</span>';
+      html += '</div>';
+      
+      // Stock
+      html += '<div>';
+      html += '<span class="label">재고:</span> ';
+      html += '<span class="value stock-value ' + stockClass + '">' + (i.stockNum ?? '-') + '개</span>';
+      html += '</div>';
+      
+      // B2B price
+      html += '<div>';
+      html += '<span class="label">도매가:</span> ';
+      html += '<span class="value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      // B2C price
+      html += '<div>';
+      html += '<span class="label">소매가:</span> ';
+      html += '<span class="value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      html += '</div>'; // End info-grid
+      html += '</div>'; // End item-card-new
       
       c.innerHTML = html;
     } else {
