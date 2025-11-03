@@ -367,9 +367,9 @@ function getNewOrderIndex(orderDate) {
     let sheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
     
     if (!sheet) {
-      Logger.log('PurchaseOrder 시트가 없어 생성을 시도합니다.');
+      Logger.log('PurchaseOrder sheet does not exist, attempting to create...');
       
-      // ✅ 시트가 없으면 자동 생성 (선택적 기능)
+      // ✅ Updated: Added PayType and IsCanceled columns
       try {
         sheet = ss.insertSheet(PURCHASE_ORDER_SHEET_NAME);
         sheet.appendRow([
@@ -382,20 +382,22 @@ function getNewOrderIndex(orderDate) {
           'Order_CostB2B', 
           'Order_CostB2C', 
           'Order_IsB2B', 
-          'Order_Cnt', 
-          'Order_TotalCost'
+          'Order_Cnt',
+          'PayType',           // ✅ NEW
+          'Order_TotalCost',
+          'IsCanceled'         // ✅ NEW
         ]);
-        Logger.log('PurchaseOrder 시트를 생성했습니다.');
+        Logger.log('PurchaseOrder sheet created successfully.');
         
         return {
           success: true,
           orderIndex: 1,
-          message: '새 시트가 생성되었습니다.'
+          message: 'New sheet created.'
         };
       } catch (createError) {
         return {
           success: false,
-          message: 'PurchaseOrder 시트를 찾을 수 없고 생성도 실패했습니다: ' + createError.toString()
+          message: 'Failed to find or create PurchaseOrder sheet: ' + createError.toString()
         };
       }
     }
@@ -494,7 +496,7 @@ function getOrderData(orderDate, orderIndex) {
     if (!sheet) {
       return {
         success: false,
-        message: 'PurchaseOrder 시트를 찾을 수 없습니다.'
+        message: 'PurchaseOrder sheet not found.'
       };
     }
     
@@ -503,13 +505,18 @@ function getOrderData(orderDate, orderIndex) {
     if (data.length <= 1) {
       return {
         success: false,
-        message: '주문 데이터가 없습니다.'
+        message: 'No order data found.'
       };
     }
     
     const headers = data[0];
     const colIndices = {};
-    const requiredCols = ['Order_SerialNumber', 'Order_Date', 'Order_Time', 'Order_Index', 'Order_CodeNum', 'Order_Name', 'Order_Description', 'Order_CostB2B', 'Order_CostB2C', 'Order_IsB2B', 'Order_Cnt', 'Order_TotalCost'];
+    const requiredCols = [
+      'Order_SerialNumber', 'Order_Date', 'Order_Time', 'Order_Index', 
+      'Order_CodeNum', 'Order_Name', 'Order_Description', 
+      'Order_CostB2B', 'Order_CostB2C', 'Order_IsB2B', 'Order_Cnt', 
+      'PayType', 'Order_TotalCost', 'IsCanceled'
+    ];
     
     requiredCols.forEach(col => {
       const index = headers.indexOf(col);
@@ -535,19 +542,26 @@ function getOrderData(orderDate, orderIndex) {
         } else {
           orderTime = '-';  // 값이 없으면 '-'
         }
+
+        // ✅ Changed: Check if IsCanceled is '취소' text
+        const canceledValue = data[i][colIndices['IsCanceled']];
+        const isCanceled = canceledValue === '취소';
+
         orders.push({
           serialNumber: data[i][colIndices['Order_SerialNumber']],
           date: data[i][colIndices['Order_Date']],
-          time: orderTime,  // ✅ 추가
+          time: orderTime,
           index: data[i][colIndices['Order_Index']],
-          codeNum: data[i][colIndices['Order_CodeNum']],        // 추가
+          codeNum: data[i][colIndices['Order_CodeNum']],
           name: data[i][colIndices['Order_Name']],
-          description: data[i][colIndices['Order_Description']], // 추가
+          description: data[i][colIndices['Order_Description']],
           costB2B: data[i][colIndices['Order_CostB2B']],
           costB2C: data[i][colIndices['Order_CostB2C']],
           isB2B: data[i][colIndices['Order_IsB2B']],
           cnt: data[i][colIndices['Order_Cnt']],
-          totalCost: data[i][colIndices['Order_TotalCost']]  // 추가
+          payType: data[i][colIndices['PayType']] || '-',              // ✅ NEW
+          totalCost: data[i][colIndices['Order_TotalCost']],
+          isCanceled: isCanceled           // ✅ NEW
         });
       }
     }
@@ -555,7 +569,7 @@ function getOrderData(orderDate, orderIndex) {
     if (orders.length === 0) {
       return {
         success: false,
-        message: '해당 날짜와 주문서 번호의 데이터를 찾을 수 없습니다.'
+        message: 'No orders found for the specified date and order number.'
       };
     }
     
@@ -565,10 +579,10 @@ function getOrderData(orderDate, orderIndex) {
     };
     
   } catch (error) {
-    Logger.log('주문서 조회 오류: ' + error.toString());
+    Logger.log('Error retrieving order: ' + error.toString());
     return {
       success: false,
-      message: '오류가 발생했습니다: ' + error.toString()
+      message: 'An error occurred: ' + error.toString()
     };
   }
 }
@@ -581,7 +595,7 @@ function saveOrder(orderData) {
     const itemSheet = ss.getSheetByName(SHEET_NAME);
     
     if (!purchaseSheet || !itemSheet) {
-      return { success: false, message: '필요한 시트를 찾을 수 없습니다.' };
+      return { success: false, message: 'Required sheets not found.' };
     }
     
     const itemData = itemSheet.getDataRange().getValues();
@@ -590,10 +604,10 @@ function saveOrder(orderData) {
     const stockNumColIndex = itemHeaders.indexOf('StockNum');
     
     if (codeNumColIndex === -1 || stockNumColIndex === -1) {
-      return { success: false, message: 'ItemInfo 시트에서 필요한 열을 찾을 수 없습니다.' };
+      return { success: false, message: 'Required columns not found in ItemInfo sheet.' };
     }
     
-    // ✅ 1단계: 모든 품목의 재고를 먼저 검증
+    // Step 1: Validate stock for all items
     const stockValidation = [];
     for (let item of orderData.items) {
       let found = false;
@@ -602,11 +616,11 @@ function saveOrder(orderData) {
             itemData[i][codeNumColIndex].toString() === item.codeNum.toString()) {
           const currentStock = itemData[i][stockNumColIndex] || 0;
           
-          // 재고 부족 검증
+          // Validate stock availability
           if (currentStock < item.cnt) {
             return {
               success: false,
-              message: `재고 부족: ${item.name} (요청: ${item.cnt}개, 현재 재고: ${currentStock}개)`
+              message: `Insufficient stock: ${item.name} (Requested: ${item.cnt}, Available: ${currentStock})`
             };
           }
           
@@ -626,29 +640,30 @@ function saveOrder(orderData) {
       if (!found) {
         return {
           success: false,
-          message: `품목을 찾을 수 없습니다: ${item.name} (코드: ${item.codeNum})`
+          message: `Item not found: ${item.name} (Code: ${item.codeNum})`
         };
       }
     }
     
-    // ✅ 2단계: 검증 완료 후 주문서 작성 및 재고 감소
+    // Step 2: Save order and update stock
     const orderDate = orderData.date;
     const orderIndex = orderData.index.toString().padStart(4, '0');
     const orderSerialNumber = orderDate.toString() + orderIndex;
-    
+    const payType = orderData.payType || '카드';  // ✅ NEW: Default to card if not specified
+
     // 트랜잭션처럼 처리 (모두 성공하거나 모두 실패)
     try {
-      // 주문서 추가
+      // Add order items
       orderData.items.forEach(item => {
         const cost = item.isB2B ? (item.costB2B || 0) : (item.costB2C || 0);
         const totalCost = cost * item.cnt;
-        // 현재 시간 가져오기
+        // Get current time for Order_Time
         const currentTime = new Date();
 
         purchaseSheet.appendRow([
           orderSerialNumber,
           parseInt(orderDate),
-          currentTime,  // ✅ Order_Time 추가
+          currentTime,
           orderIndex,
           item.codeNum,
           item.name,
@@ -657,36 +672,131 @@ function saveOrder(orderData) {
           item.costB2C || 0,
           item.isB2B ? 1 : 0,
           item.cnt,
-          totalCost
+          payType,           // ✅ NEW
+          totalCost,
+          ''                 // ✅ NEW: IsCanceled (empty = not canceled)
         ]);
       });
       
-      // 재고 감소
+      // Update stock
       stockValidation.forEach(stock => {
         itemSheet.getRange(stock.rowIndex + 1, stockNumColIndex + 1).setValue(stock.newStock);
       });
       
       // ✅ 3단계: 로그 기록 (선택사항)
-      Logger.log(`주문 완료 - 번호: ${orderSerialNumber}, 품목 수: ${orderData.items.length}`);
+      Logger.log(`Order completed - Number: ${orderSerialNumber}, Items: ${orderData.items.length}`);
       
       return {
         success: true,
-        message: '주문이 성공적으로 저장되었습니다.',
+        message: 'Order saved successfully.',
         orderSerialNumber: orderSerialNumber,
         stockUpdates: stockValidation
       };
       
     } catch (saveError) {
       // 롤백은 어려우므로 에러 로그만 남김
-      Logger.log('주문 저장 중 오류 (일부만 저장되었을 수 있음): ' + saveError.toString());
+      Logger.log('Error during order save (partial save may have occurred): ' + saveError.toString());
       throw saveError;
     }
     
   } catch (error) {
-    Logger.log('주문 저장 오류: ' + error.toString());
+    Logger.log('Error saving order: ' + error.toString());
     return {
       success: false,
-      message: '주문 저장 중 오류가 발생했습니다: ' + error.toString()
+      message: 'An error occurred while saving order: ' + error.toString()
+    };
+  }
+}
+
+// ===== NEW FUNCTION: Cancel Order =====
+function cancelOrder(orderSerialNumber) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const purchaseSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    const itemSheet = ss.getSheetByName(SHEET_NAME);
+    
+    if (!purchaseSheet || !itemSheet) {
+      return { success: false, message: 'Required sheets not found.' };
+    }
+    
+    const data = purchaseSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const serialColIndex = headers.indexOf('Order_SerialNumber');
+    const canceledColIndex = headers.indexOf('IsCanceled');
+    const codeNumColIndex = headers.indexOf('Order_CodeNum');
+    const cntColIndex = headers.indexOf('Order_Cnt');
+    
+    if (serialColIndex === -1 || canceledColIndex === -1) {
+      return { success: false, message: 'Required columns not found.' };
+    }
+    
+    // Find all rows with matching serial number
+    const rowsToCancel = [];
+    const itemsToRestore = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][serialColIndex] && 
+          data[i][serialColIndex].toString() === orderSerialNumber.toString()) {
+        
+        // Check if already canceled
+        if (data[i][canceledColIndex] === '취소') {
+          return { success: false, message: 'Order is already canceled.' };
+        }
+        
+        rowsToCancel.push(i + 1); // +1 for 1-indexed sheet rows
+        itemsToRestore.push({
+          codeNum: data[i][codeNumColIndex],
+          cnt: data[i][cntColIndex]
+        });
+      }
+    }
+    
+    if (rowsToCancel.length === 0) {
+      return { success: false, message: 'Order not found: ' + orderSerialNumber };
+    }
+    
+    // Mark rows as canceled and apply red color
+    rowsToCancel.forEach(rowNum => {
+      purchaseSheet.getRange(rowNum, canceledColIndex + 1).setValue('취소');
+      
+      // ✅ Apply red color to entire row
+      const lastCol = purchaseSheet.getLastColumn();
+      purchaseSheet.getRange(rowNum, 1, 1, lastCol).setFontColor('#dc2626');
+    });
+    
+    // Restore stock
+    const itemData = itemSheet.getDataRange().getValues();
+    const itemHeaders = itemData[0];
+    const itemCodeColIndex = itemHeaders.indexOf('CodeNum');
+    const stockColIndex = itemHeaders.indexOf('StockNum');
+    
+    itemsToRestore.forEach(item => {
+      for (let i = 1; i < itemData.length; i++) {
+        if (itemData[i][itemCodeColIndex] && 
+            itemData[i][itemCodeColIndex].toString() === item.codeNum.toString()) {
+          const currentStock = itemData[i][stockColIndex] || 0;
+          const newStock = currentStock + item.cnt;
+          itemSheet.getRange(i + 1, stockColIndex + 1).setValue(newStock);
+          break;
+        }
+      }
+    });
+    
+    Logger.log(`Order canceled - Serial: ${orderSerialNumber}, Rows: ${rowsToCancel.length}`);
+    
+    return {
+      success: true,
+      message: 'Order canceled successfully.',
+      canceledRows: rowsToCancel.length,
+      restoredItems: itemsToRestore
+    };
+    
+  } catch (error) {
+    Logger.log('Error canceling order: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred while canceling order: ' + error.toString()
     };
   }
 }

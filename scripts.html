@@ -371,6 +371,11 @@
     const day = orderDateStr.substring(6, 8);
     const formattedDate = year + '년 ' + parseInt(month) + '월 ' + parseInt(day) + '일';
 
+    // 주문 시간 포맷팅
+    const orderTime = orders[0].time || '-';
+    const payType = orders[0].payType || '-';
+    const isCanceled = orders[0].isCanceled === true;
+
     // 합계 계산
     let totalAmount = 0;
     let totalQty = 0;
@@ -379,90 +384,173 @@
       totalQty += order.cnt || 0;
     });
 
-    // 주문 시간 포맷팅
-    const orderTime = orders[0].time || '-';
+    // ✅ NEW: Modern white card style
+    let html = '';
+
+    // Header card
+    if (isCanceled) {
+      html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #fee2e2; border-left: 5px solid #dc2626;">';
+      html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">';
+      html += '<span style="font-size: 42px;">❌</span>';
+      html += '<div>';
+      html += '<h2 style="font-size: 38px; color: #2c3e50; margin: 0; font-weight: 700;">주문서 상세 정보</h2>';
+      html += '<div style="background: #fee2e2; color: #dc2626; display: inline-block; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 18px; margin-top: 8px;">취소된 주문</div>';
+      html += '</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #e8ecef; border-left: 5px solid #3498db;">';
+      html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">';
+      html += '<span style="font-size: 42px;">📋</span>';
+      html += '<h2 style="font-size: 38px; color: #2c3e50; margin: 0; font-weight: 700;">주문서 상세 정보</h2>';
+      html += '</div>';
+    }
     
-    // 주문서 헤더 HTML
-    let headerHTML = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-bottom: 20px;">';
-    headerHTML += '<h2 style="font-size: 45px; margin-bottom: 15px;">📋 주문서 상세 정보</h2>';
-    headerHTML += '<div style="font-size: 32px; line-height: 1.6;">';
-    headerHTML += '<div> 주문서 번호: <strong>' + orderSerialNumber + '</strong></div>';
-    headerHTML += '<div> 주문 날짜: <strong>' + formattedDate + '</strong></div>';
-    headerHTML += '<div> 주문 시간: <strong>' + orderTime + '</strong></div>';
-    headerHTML += '</div></div>';
+    // Order info grid
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 20px;">';
+    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">주문서 번호</div>';
+    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600; font-family: monospace;">' + orderSerialNumber + '</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">주문 날짜</div>';
+    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600;">' + formattedDate + '</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">주문 시간</div>';
+    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600;">' + orderTime + '</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">결제 방법</div>';
+    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600;">' + payType + '</div>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
 
-    let contentHTML = headerHTML;
-    contentHTML += '<div style="margin: 20px 0;">';
-    contentHTML += '<h3 style="font-size: 35px; color: #667eea; margin-bottom: 15px;">주문 품목 목록</h3>';
-    contentHTML += '</div>';
-    contentHTML += '<div style="overflow-x: auto;">';
-    contentHTML += '<table class="order-table" id="orderViewTable">';
-    contentHTML += '<thead>';
-    contentHTML += '<tr style="border-bottom: none;">';
-    contentHTML += '<th rowspan="2" style="vertical-align: middle; width: 20%;">코드번호</th>';
-    contentHTML += '<th style="padding-bottom: 8px; width: 40%;">품명</th>';
-    contentHTML += '<th style="padding-bottom: 8px; width: 20%;">타입</th>';
-    contentHTML += '<th style="padding-bottom: 8px; width: 20%;">개수</th>';
-    contentHTML += '</tr>';
-    contentHTML += '<tr>';
-    contentHTML += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>';
-    contentHTML += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">가격</th>';
-    contentHTML += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">총가격</th>';
-    contentHTML += '</tr>';
-    contentHTML += '</thead>';
-    contentHTML += '<tbody id="orderViewBody"></tbody>';
-    contentHTML += '<tfoot>';
-    contentHTML += '<tr style="background: #f8f8f8; font-weight: 600; font-size: 28px;">';
-    contentHTML += '<td colspan="7" style="text-align: right; padding: 15px;">';
-    contentHTML += '합계: <strong style="color: #667eea; font-size: 32px;">' + totalAmount.toLocaleString() + '원</strong>';
-    contentHTML += '</td>';
-    contentHTML += '</tr>';
-    contentHTML += '</tfoot>';
-    contentHTML += '</table>';
-    contentHTML += '</div>';
-    contentHTML += '<div style="background: #f8f8f8; padding: 20px; border-radius: 15px; margin-top: 20px;">';
-    contentHTML += '<div style="font-size: 32px; line-height: 1.8;">';
-    contentHTML += '<div> 총 주문 금액: <strong style="color: #667eea;">' + totalAmount.toLocaleString() + '원</strong></div>';
-    contentHTML += '<div> 총 품목 수: <strong>' + orders.length + '개</strong></div>';
-    contentHTML += '<div> 총 수량: <strong>' + totalQty + '개</strong></div>';
-    contentHTML += '</div>';
-    contentHTML += '</div>';
+    // Items section
+    html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #e8ecef;">';
+    html += '<h3 style="font-size: 24px; color: #2c3e50; margin-bottom: 20px; font-weight: 600;">주문 품목 목록</h3>';
+    html += '<div style="overflow-x: auto;">';
+    html += '<table class="order-table" id="orderViewTable">';
+    html += '<thead>';
+    html += '<tr style="border-bottom: none;">';
+    html += '<th rowspan="2" style="vertical-align: middle; width: 20%;">코드번호</th>';
+    html += '<th style="padding-bottom: 8px; width: 40%;">품명</th>';
+    html += '<th style="padding-bottom: 8px; width: 20%;">타입</th>';
+    html += '<th style="padding-bottom: 8px; width: 20%;">개수</th>';
+    html += '</tr>';
+    html += '<tr>';
+    html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>';
+    html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">가격</th>';
+    html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">총가격</th>';
+    html += '</tr>';
+    html += '</thead>';
+    html += '<tbody id="orderViewBody"></tbody>';
+    html += '</table>';
+    html += '</div>';
+    html += '</div>';
 
-    document.getElementById('orderViewContent').innerHTML = contentHTML;
+    // Summary section
+    const summaryBorderColor = isCanceled ? '#fee2e2' : '#e3f2fd';
+    html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid ' + summaryBorderColor + ';">';
+    html += '<h3 style="font-size: 24px; color: #2c3e50; margin-bottom: 20px; font-weight: 600;">주문 요약</h3>';
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 주문 금액</div>';
+    html += '<div style="color: #3498db; font-size: 32px; font-weight: 700;">' + totalAmount.toLocaleString() + '원</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 품목 수</div>';
+    html += '<div style="color: #2c3e50; font-size: 32px; font-weight: 700;">' + orders.length + '개</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 수량</div>';
+    html += '<div style="color: #2c3e50; font-size: 32px; font-weight: 700;">' + totalQty + '개</div>';
+    html += '</div>';
+    
+    html += '</div>';
+    html += '</div>';
+
+    // Cancel button
+    if (!isCanceled) {
+      html += '<button class="btn btn-secondary" onclick="confirmCancelOrder(\'' + orderSerialNumber + '\')" style="margin-top: 0;">';
+      html += '<span>❌</span> 주문 취소하기';
+      html += '</button>';
+    }
+
+    document.getElementById('orderViewContent').innerHTML = html;
 
     const tbody = document.getElementById('orderViewBody');
     orders.forEach(function(order) {
       const cost = order.isB2B === 1 ? order.costB2B : order.costB2C;
 
-      // 첫 번째 행
+      // First row
       const row1 = tbody.insertRow();
       row1.style.borderBottom = 'none';
-      row1.innerHTML = '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 26px;">' + 
+      row1.innerHTML = '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 20px;">' + 
         order.codeNum + 
         '</td>' +
-        '<td style="font-size: 26px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px;">' + 
+        '<td style="font-size: 20px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px;">' + 
         order.name + 
         '</td>' +
         '<td style="padding: 15px 10px 5px 10px; text-align: center;">' + 
         (order.isB2B === 1 ? '도' : '소') + 
         '</td>' +
-        '<td style="vertical-align: middle; font-size: 26px; text-align: center; padding: 15px 10px 5px 10px;">' + 
+        '<td style="vertical-align: middle; font-size: 20px; text-align: center; padding: 15px 10px 5px 10px;">' + 
         order.cnt + 
         '</td>';
       
-      // 두 번째 행
+      // Second row
       const row2 = tbody.insertRow();
       row2.style.borderBottom = '2px solid #ddd';
-      row2.innerHTML = '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 24px; color: #666;">' + 
+      row2.innerHTML = '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 18px; color: #666;">' + 
         (order.description || '-') + 
         '</td>' +
         '<td style="padding: 5px 15px 15px 15px; text-align: center;">' +
-        '<strong style="color: #667eea; font-size: 26px;">' + cost.toLocaleString() + '원</strong>' +
+        '<strong style="color: #3498db; font-size: 20px;">' + cost.toLocaleString() + '원</strong>' +
         '</td>' +
         '<td style="padding: 5px 15px 15px 15px; text-align: center;">' +
-        '<strong style="color: #667eea; font-size: 26px;">' + order.totalCost.toLocaleString() + '원</strong>' +
+        '<strong style="color: #3498db; font-size: 20px;">' + order.totalCost.toLocaleString() + '원</strong>' +
         '</td>';
     });
+  }
+
+  // ===== NEW FUNCTION: Cancel Order =====
+  function confirmCancelOrder(orderSerialNumber) {
+    if (confirm('정말로 이 주문을 취소하시겠습니까?\n\n주문번호: ' + orderSerialNumber + '\n\n재고가 복원됩니다.')) {
+      cancelOrderById(orderSerialNumber);
+    }
+  }
+
+  function cancelOrderById(orderSerialNumber) {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          alert('주문이 취소되었습니다.\n\n취소된 품목 수: ' + result.canceledRows + '개\n재고가 복원되었습니다.');
+          // Reload the order view to show updated status
+          const dateStr = orderSerialNumber.substring(0, 8);
+          const indexStr = parseInt(orderSerialNumber.substring(8));
+          
+          google.script.run
+            .withSuccessHandler(function(result) {
+              if (result.success) {
+                displayOrderView(result.orders);
+              }
+            })
+            .getOrderData(dateStr, indexStr);
+        } else {
+          alert('주문 취소 실패:\n' + result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        alert('주문 취소 중 오류 발생:\n' + error);
+      })
+      .cancelOrder(orderSerialNumber);
   }
 
   function displayOrderList(orderDate, orderList) {
@@ -508,7 +596,7 @@
     let totalItems = 0;
     let totalQty = 0;
     
-    // 전체 합계 계산
+    // Calculate totals
     allOrders.forEach(function(orderGroup) {
       orderGroup.orders.forEach(function(order) {
         totalAmount += order.totalCost || 0;
@@ -517,16 +605,23 @@
       totalItems += orderGroup.orders.length;
     });
     
-    let html = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-bottom: 20px;">';
-    html += '<h2 style="font-size: 45px; margin-bottom: 15px;">📋 전체 주문서 목록</h2>';
-    html += '<div style="font-size: 32px; line-height: 1.6;">';
-    html += '<div>📅 날짜: <strong>' + formattedDate + '</strong></div>';
-    html += '<div>📝 총 주문서 수: <strong>' + allOrders.length + '개</strong></div>';
-    html += '</div></div>';
+    // Header
+    let html = '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #e8ecef; border-left: 5px solid #3498db;">';
+    html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">';
+    html += '<span style="font-size: 42px;">📋</span>';
+    html += '<div>';
+    html += '<h2 style="font-size: 38px; color: #2c3e50; margin: 0; font-weight: 700;">전체 주문서 목록</h2>';
+    html += '<div style="color: #7f8c8d; font-size: 18px; margin-top: 8px;">📅 ' + formattedDate + ' · 총 <strong style="color: #3498db;">' + allOrders.length + '</strong>개 주문서</div>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
     
-    // 각 주문서를 쭉 나열
+    // Display each order
     allOrders.forEach(function(orderGroup) {
       const orderSerialNumber = orderGroup.orders[0].serialNumber;
+      const orderTime = orderGroup.orders[0].time || '-';
+      const payType = orderGroup.orders[0].payType || '-';
+      const isCanceled = orderGroup.orders[0].isCanceled === true;
       let orderAmount = 0;
       let orderQty = 0;
       
@@ -534,20 +629,37 @@
         orderAmount += order.totalCost || 0;
         orderQty += order.cnt || 0;
       });
-      
-      // 주문 시간 가져오기
-      const orderTime = orderGroup.orders[0].time || '-';
 
-      html += '<div style="background: #f8f8f8; padding: 20px; border-radius: 15px; margin-bottom: 20px; border-left: 5px solid #667eea;">';
-      html += '<h3 style="font-size: 38px; color: #667eea; margin-bottom: 15px;">';
-      html += '📝 주문서 #' + orderGroup.index + ' (' + orderSerialNumber + ')';
+      // ✅ NEW: Modern card style
+      const cardBorder = isCanceled ? 'border: 2px solid #fee2e2; border-left: 5px solid #dc2626;' : 'border: 2px solid #e8ecef; border-left: 5px solid #3498db;';
+      const titleColor = isCanceled ? '#dc2626' : '#2c3e50';
+      const accentColor = isCanceled ? '#dc2626' : '#3498db';
+
+      html += '<div style="background: white; ' + cardBorder + ' padding: 25px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);">';
+      
+      // Header with cancel badge or button
+      html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">';
+      html += '<div>';
+      html += '<h3 style="font-size: 28px; color: ' + titleColor + '; margin: 0 0 8px 0; font-weight: 700;">';
+      html += '주문서 #' + orderGroup.index;
       html += '</h3>';
-      html += '<div style="font-size: 28px; margin-bottom: 15px; color: #666;">';
-      html += '🕐 주문 시간: <strong>' + orderTime + '</strong> | ';
-      html += '💰 주문서 금액: <strong style="color: #667eea;">' + orderAmount.toLocaleString() + '원</strong> | ';
-      html += '📦 품목 수: <strong>' + orderGroup.orders.length + '개</strong> | ';
-      html += '🔢 수량: <strong>' + orderQty + '개</strong>';
+      html += '<div style="font-family: monospace; color: #7f8c8d; font-size: 16px;">' + orderSerialNumber + '</div>';
       html += '</div>';
+      
+      if (isCanceled) {
+        html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
+      } else {
+        html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrderFromList(\'' + orderSerialNumber + '\', \'' + orderDate + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
+      }
+      html += '</div>';
+      
+      // ✅ NEW: Simple text info (removed card-style grid)
+      html += '<div style="color: #7f8c8d; font-size: 18px; line-height: 1.8; margin-bottom: 20px;">';
+      html += '주문 시간: <strong style="color: #2c3e50;">' + orderTime + '</strong><br>';
+      html += '결제 방법: <strong style="color: #2c3e50;">' + payType + '</strong><br>';
+      html += '주문 금액: <strong style="color: ' + accentColor + ';">' + orderAmount.toLocaleString() + '원</strong>';
+      html += '</div>';
+      
       html += '<div style="overflow-x: auto;">';
       html += '<table class="order-table">';
       html += '<thead>';
@@ -567,33 +679,34 @@
       
       orderGroup.orders.forEach(function(order) {
         const cost = order.isB2B === 1 ? order.costB2B : order.costB2C;
-        
-        // 첫 번째 행
+        const textStyle = isCanceled ? 'text-decoration: line-through; opacity: 0.5;' : '';
+      
+        // First row
         html += '<tr style="border-bottom: none;">';
-        html += '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 26px;">';
+        html += '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 18px; ' + textStyle + '">';
         html += order.codeNum;
         html += '</td>';
-        html += '<td style="font-size: 26px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px;">';
+        html += '<td style="font-size: 18px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px; ' + textStyle + '">';
         html += order.name;
         html += '</td>';
-        html += '<td style="padding: 15px 10px 5px 10px; text-align: center;">';
+        html += '<td style="padding: 15px 10px 5px 10px; text-align: center; ' + textStyle + '">';
         html += order.isB2B === 1 ? '도' : '소';
         html += '</td>';
-        html += '<td style="vertical-align: middle; font-size: 26px; text-align: center; padding: 15px 10px 5px 10px;">';
+        html += '<td style="vertical-align: middle; font-size: 18px; text-align: center; padding: 15px 10px 5px 10px; ' + textStyle + '">';
         html += order.cnt;
         html += '</td>';
         html += '</tr>';
         
-        // 두 번째 행
+        // Second row
         html += '<tr style="border-bottom: 2px solid #ddd;">';
-        html += '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 24px; color: #666;">';
+        html += '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 16px; color: #666; ' + textStyle + '">';
         html += order.description || '-';
         html += '</td>';
-        html += '<td style="padding: 5px 15px 15px 15px; text-align: center;">';
-        html += '<strong style="color: #667eea; font-size: 26px;">' + cost.toLocaleString() + '원</strong>';
+        html += '<td style="padding: 5px 15px 15px 15px; text-align: center; ' + textStyle + '">';
+        html += '<strong style="color: ' + accentColor + '; font-size: 18px;">' + cost.toLocaleString() + '원</strong>';
         html += '</td>';
-        html += '<td style="padding: 5px 15px 15px 15px; text-align: center;">';
-        html += '<strong style="color: #667eea; font-size: 26px;">' + order.totalCost.toLocaleString() + '원</strong>';
+        html += '<td style="padding: 5px 15px 15px 15px; text-align: center; ' + textStyle + '">';
+        html += '<strong style="color: ' + accentColor + '; font-size: 18px;">' + order.totalCost.toLocaleString() + '원</strong>';
         html += '</td>';
         html += '</tr>';
       });
@@ -604,17 +717,68 @@
       html += '</div>';
     });
     
-    // 전체 합계
-    html += '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-top: 20px;">';
-    html += '<h3 style="font-size: 38px; margin-bottom: 15px;">📊 전체 합계</h3>';
-    html += '<div style="font-size: 32px; line-height: 1.8;">';
-    html += '<div>💰 총 주문 금액: <strong>' + totalAmount.toLocaleString() + '원</strong></div>';
-    html += '<div>📦 총 품목 수: <strong>' + totalItems + '개</strong></div>';
-    html += '<div>🔢 총 수량: <strong>' + totalQty + '개</strong></div>';
+    // Summary card
+    html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #e3f2fd; border-left: 5px solid #3498db;">';
+    html += '<h3 style="font-size: 24px; color: #2c3e50; margin-bottom: 20px; font-weight: 600;">📊 전체 합계</h3>';
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 주문 금액</div>';
+    html += '<div style="color: #3498db; font-size: 32px; font-weight: 700;">' + totalAmount.toLocaleString() + '원</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 품목 수</div>';
+    html += '<div style="color: #2c3e50; font-size: 32px; font-weight: 700;">' + totalItems + '개</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 수량</div>';
+    html += '<div style="color: #2c3e50; font-size: 32px; font-weight: 700;">' + totalQty + '개</div>';
+    html += '</div>';
+    
     html += '</div>';
     html += '</div>';
     
     document.getElementById('orderViewContent').innerHTML = html;
+  }
+
+  // ===== NEW FUNCTION: Cancel order from list view =====
+  function confirmCancelOrderFromList(orderSerialNumber, orderDate) {
+    if (confirm('정말로 이 주문을 취소하시겠습니까?\n\n주문번호: ' + orderSerialNumber + '\n\n재고가 복원됩니다.')) {
+      cancelOrderAndRefreshList(orderSerialNumber, orderDate);
+    }
+  }
+
+  function cancelOrderAndRefreshList(orderSerialNumber, orderDate) {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          alert('주문이 취소되었습니다.\n\n취소된 품목 수: ' + result.canceledRows + '개\n재고가 복원되었습니다.');
+          
+          // ✅ Reload the entire order list to show updated status
+          google.script.run
+            .withSuccessHandler(function(listResult) {
+              if (listResult.success) {
+                hideAllScreens();
+                const s = document.getElementById('orderViewScreen');
+                s.style.display = 'block';
+                s.classList.add('active');
+                displayOrderList(orderDate, listResult.orderList);
+              }
+            })
+            .withFailureHandler(function(error) {
+              alert('주문 목록 새로고침 중 오류 발생:\n' + error);
+            })
+            .getOrderListByDate(orderDate);
+        } else {
+          alert('주문 취소 실패:\n' + result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        alert('주문 취소 중 오류 발생:\n' + error);
+      })
+      .cancelOrder(orderSerialNumber);
   }
 
   function updateOrderType() {
@@ -852,9 +1016,13 @@
       return;
     }
     
+    // ✅ NEW: Get selected payment type
+    const payType = document.querySelector('input[name="payType"]:checked').value;
+
     const orderData = {
       date: parseInt(orderDate),
       index: orderIndex,
+      payType: payType,  // ✅ NEW
       items: orderItems
     };
     

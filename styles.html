@@ -19,6 +19,31 @@
     width: 100%;
   }
 
+  /* ✅ NEW: Main screen specific container with reduced padding */
+  #mainScreen .container {
+    max-width: 1200px;  /* 기존 1100px에서 증가 */
+    padding: 0;
+  }
+
+  #mainScreen .card {
+    padding: clamp(15px, 2vw, 25px);  /* 기존 20px에서 감소 */
+  }
+
+  /* ✅ Reduce padding for main screen components */
+  #mainScreen .top-bar {
+    margin-bottom: 30px;  /* 기존 40px에서 감소 */
+    padding: 0 5px;
+  }
+
+  #mainScreen .welcome-section {
+    padding: clamp(25px, 3vw, 35px);  /* 기존 30px-40px에서 감소 */
+    margin-bottom: 20px;  /* 기존 25px에서 감소 */
+  }
+
+  #mainScreen .feature-card {
+    padding: clamp(20px, 3vw, 30px);  /* 기존 25px-35px에서 감소 */
+  }
+  
   .screen {
     display: none;
     animation: fadeIn 0.3s ease-in;
@@ -865,7 +890,7 @@
   /* Mobile Responsive */
   @media (max-width: 768px) {
     body {
-      padding: 15px;
+      padding: 10px;
     }
 
     .container {
@@ -874,7 +899,7 @@
     }
 
     .card {
-      padding: 20px 15px;
+      padding: 15px 10px;
       border-radius: 12px;
     }
 
@@ -1077,6 +1102,13 @@
     .feature-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  /* ✅ NEW: Large action button class */
+  .btn-action-large {
+    min-height: clamp(100px, 10vh, 120px);
+    font-size: clamp(24px, 3.5vw, 32px);
+    padding: clamp(30px, 3vw, 38px);
   }
 
 </style>
