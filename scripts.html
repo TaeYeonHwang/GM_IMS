@@ -133,7 +133,7 @@
   }
 
   function hideAllScreens() {
-    ['mainScreen', 'inventoryMenuScreen', 'searchMenuScreen', 'searchScreen', 'qrSearchScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen'].forEach(id => {
+    ['mainScreen', 'inventoryMenuScreen', 'searchMenuScreen', 'searchScreen', 'qrSearchScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen', 'memoScreen'].forEach(id => {
       document.getElementById(id).style.display = 'none';
       document.getElementById(id).classList.remove('active');
     });
@@ -147,6 +147,7 @@
     stopCamera();
     stopQRCamera();
     stopOrderQRCamera();
+    loadDashboardInfo(); // Reload dashboard info when returning to main
     navigateToScreen('mainScreen');
   }
 
@@ -1309,6 +1310,7 @@
   window.addEventListener('load', function() {
     fetchUserIP();
     loadLatestRevision();
+    loadDashboardInfo();  // Load dashboard info on page load
     // Set initial history state
     history.replaceState({ screen: 'mainScreen' }, '', '#mainScreen');
   });
@@ -1355,22 +1357,20 @@
       const i = r.item;
 
       // Helper function to get stock status
-      function getStockClass(stock) {
-        if (stock === 0) return 'out';
-        if (stock < 10) return 'low';
-        if (stock < 50) return 'normal';
-        return 'sufficient';
+      function getStockClass(isShortage) {
+        if (isShortage === 0) return 'out';      // 품절
+        if (isShortage === 1) return 'low';      // 부족
+        return 'sufficient';                      // 양호
       }
 
-      function getStockText(stock) {
-        if (stock === 0) return '품절';
-        if (stock < 10) return '부족';
-        if (stock < 50) return '보통';
-        return '충분';
+      function getStockText(isShortage) {
+        if (isShortage === 0) return '품절';
+        if (isShortage === 1) return '부족';
+        return '양호';
       }
 
-      const stockClass = getStockClass(i.stockNum ?? 0);
-      const stockText = getStockText(i.stockNum ?? 0);
+      const stockClass = getStockClass(i.isShortage);
+      const stockText = getStockText(i.isShortage);
 
       // Header with name and stock badge
       html += '<div class="card-header">';
@@ -1444,24 +1444,28 @@
     }
     
     // Helper function to get stock status
-    function getStockClass(stock) {
-      if (stock === 0) return 'out';
-      if (stock < 10) return 'low';
-      if (stock < 50) return 'normal';
+    function getStockClass(isShortage) {
+      if (isShortage === undefined || isShortage === null || isShortage === '') {
+       return 'sufficient'; // Default to sufficient if no value
+      }
+      if (isShortage === 0) return 'out';
+      if (isShortage === 1) return 'low';
       return 'sufficient';
     }
     
-    function getStockText(stock) {
-      if (stock === 0) return '품절';
-      if (stock < 10) return '부족';
-      if (stock < 50) return '보통';
-      return '충분';
+    function getStockText(isShortage) {
+      if (isShortage === undefined || isShortage === null || isShortage === '') {
+        return '양호'; // Default to good if no value
+      }
+      if (isShortage === 0) return '품절';
+      if (isShortage === 1) return '부족';
+      return '양호';
     }
     
     let html = '<div class="item-list">';
     items.forEach(function(i) {
-      const stockClass = getStockClass(i.stockNum ?? 0);
-      const stockText = getStockText(i.stockNum ?? 0);
+      const stockClass = getStockClass(i.isShortage);
+      const stockText = getStockText(i.isShortage);
       
       html += '<div class="item-card-new">';
       
@@ -1606,22 +1610,20 @@
       const i = r.item;
       
       // Helper function to get stock status
-      function getStockClass(stock) {
-        if (stock === 0) return 'out';
-        if (stock < 10) return 'low';
-        if (stock < 50) return 'normal';
+      function getStockClass(isShortage) {
+        if (isShortage === 0) return 'out';
+        if (isShortage === 1) return 'low';
         return 'sufficient';
       }
       
-      function getStockText(stock) {
-        if (stock === 0) return '품절';
-        if (stock < 10) return '부족';
-        if (stock < 50) return '보통';
-        return '충분';
+      function getStockText(isShortage) {
+        if (isShortage === 0) return '품절';
+        if (isShortage === 1) return '부족';
+        return '양호';
       }
 
-      const stockClass = getStockClass(i.stockNum ?? 0);
-      const stockText = getStockText(i.stockNum ?? 0);
+      const stockClass = getStockClass(i.isShortage);
+      const stockText = getStockText(i.isShortage);
       
       let html = '<div class="item-card-new">';
 
@@ -1840,4 +1842,228 @@
     }
   }
   
+  // ===== Memo Functions =====
+  function showMemo() {
+    hideAllScreens();
+    const s = document.getElementById('memoScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopCamera();
+    stopQRCamera();
+    stopOrderQRCamera();
+    
+    // Set today's date
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+    document.getElementById('memoTodayDate').textContent = `📅 ${year}년 ${month}월 ${day}일`;
+    
+    // Clear textarea
+    document.getElementById('memoTextarea').value = '';
+    document.getElementById('memoMessage').innerHTML = '';
+    
+    // Load memos
+    loadMemos();
+    
+    navigateToScreen('memoScreen');
+  }
+
+  function loadMemos() {
+    document.getElementById('memoListContainer').innerHTML = '<div class="loading"><div class="spinner"></div><div>메모 로딩 중...</div></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          displayMemos(result.memos);
+        } else {
+          document.getElementById('memoListContainer').innerHTML = '<div class="alert alert-error">' + result.message + '</div>';
+        }
+      })
+      .withFailureHandler(function(error) {
+        document.getElementById('memoListContainer').innerHTML = '<div class="alert alert-error">메모 로드 중 오류: ' + error + '</div>';
+      })
+      .getLatestMemos();
+  }
+
+  function displayMemos(memos) {
+    const container = document.getElementById('memoListContainer');
+    
+    if (memos.length === 0) {
+      container.innerHTML = '<div class="alert alert-info">아직 작성된 메모가 없습니다.</div>';
+      return;
+    }
+    
+    let html = '';
+    
+    memos.forEach(function(memo) {
+      const dateStr = memo.date.toString();
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      const formattedDate = `${year}-${month}-${day}`;
+      
+      html += '<div class="memo-card" id="memoCard' + memo.rowNumber + '">';
+      html += '<div class="memo-card-header">';
+      html += '<div class="memo-date">' + formattedDate + ' #' + memo.index + '</div>';
+      html += '<div class="memo-actions">';
+      html += '<button class="btn-memo-action" onclick="editMemo(' + memo.rowNumber + ', \'' + memo.content.replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\')">✏️ 수정</button>';
+      html += '<button class="btn-memo-action" onclick="confirmDeleteMemo(' + memo.rowNumber + ')">🗑️ 삭제</button>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="memo-content" id="memoContent' + memo.rowNumber + '">' + memo.content.replace(/\n/g, '<br>') + '</div>';
+      html += '<div class="memo-edit-area" id="memoEdit' + memo.rowNumber + '" style="display:none;">';
+      html += '<textarea class="memo-textarea" id="memoEditText' + memo.rowNumber + '" rows="3"></textarea>';
+      html += '<div style="display: flex; gap: 8px; margin-top: 10px;">';
+      html += '<button class="btn btn-primary btn-small" onclick="saveEditedMemo(' + memo.rowNumber + ')">💾 저장</button>';
+      html += '<button class="btn btn-secondary btn-small" onclick="cancelEdit(' + memo.rowNumber + ')">❌ 취소</button>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+    });
+    
+    container.innerHTML = html;
+  }
+
+  function saveMemo() {
+    const content = document.getElementById('memoTextarea').value.trim();
+    
+    if (!content) {
+      showMemoMessage('메모 내용을 입력해주세요.', 'error');
+      return;
+    }
+    
+    showMemoMessage('메모 저장 중...', 'info');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          showMemoMessage('메모가 저장되었습니다!', 'success');
+          document.getElementById('memoTextarea').value = '';
+          loadMemos();
+        } else {
+          showMemoMessage('저장 실패: ' + result.message, 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showMemoMessage('저장 중 오류: ' + error, 'error');
+      })
+      .addMemo(content);
+  }
+
+  function editMemo(rowNumber, content) {
+    // Hide content, show edit area
+    document.getElementById('memoContent' + rowNumber).style.display = 'none';
+    document.getElementById('memoEdit' + rowNumber).style.display = 'block';
+    document.getElementById('memoEditText' + rowNumber).value = content;
+  }
+
+  function cancelEdit(rowNumber) {
+    // Show content, hide edit area
+    document.getElementById('memoContent' + rowNumber).style.display = 'block';
+    document.getElementById('memoEdit' + rowNumber).style.display = 'none';
+  }
+
+  function saveEditedMemo(rowNumber) {
+    const newContent = document.getElementById('memoEditText' + rowNumber).value.trim();
+    
+    if (!newContent) {
+      alert('메모 내용을 입력해주세요.');
+      return;
+    }
+    
+    showMemoMessage('메모 수정 중...', 'info');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          showMemoMessage('메모가 수정되었습니다!', 'success');
+          loadMemos();
+        } else {
+          showMemoMessage('수정 실패: ' + result.message, 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showMemoMessage('수정 중 오류: ' + error, 'error');
+      })
+      .updateMemo(rowNumber, newContent);
+  }
+
+  function confirmDeleteMemo(rowNumber) {
+    if (confirm('이 메모를 삭제하시겠습니까?')) {
+      deleteMemoById(rowNumber);
+    }
+  }
+
+  function deleteMemoById(rowNumber) {
+    showMemoMessage('메모 삭제 중...', 'info');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          showMemoMessage('메모가 삭제되었습니다.', 'success');
+          loadMemos();
+        } else {
+          showMemoMessage('삭제 실패: ' + result.message, 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showMemoMessage('삭제 중 오류: ' + error, 'error');
+      })
+      .deleteMemo(rowNumber);
+  }
+
+  function showMemoMessage(msg, type) {
+    const msgDiv = document.getElementById('memoMessage');
+    let className = 'alert-info';
+    if (type === 'error') className = 'alert-error';
+    if (type === 'success') className = 'alert-success';
+    
+    msgDiv.innerHTML = '<div class="alert ' + className + '">' + msg + '</div>';
+    
+    if (type === 'success' || type === 'error') {
+      setTimeout(() => {
+        msgDiv.innerHTML = '';
+      }, 3000);
+    }
+  }
+
+  // ===== Dashboard Functions =====
+  function loadDashboardInfo() {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          // Update date
+          document.getElementById('dashboardDate').textContent = result.todayDate;
+          
+          // Update order count
+          document.getElementById('dashboardOrderCount').textContent = result.orderCount + '건';
+          
+          // Update stock status
+          const statusElement = document.getElementById('dashboardStockStatus');
+          let statusHTML = '';
+          
+          if (result.stockStatus === 0) {
+            // 경고 (품절 있음)
+            statusHTML = '<span class="status-badge status-critical">🔴 경고</span>';
+          } else if (result.stockStatus === 1) {
+            // 관심 (부족 있음)
+            statusHTML = '<span class="status-badge status-warning">🟠 관심</span>';
+          } else {
+            // 양호
+            statusHTML = '<span class="status-badge status-good">🟢 양호</span>';
+          }
+          
+          statusElement.innerHTML = statusHTML;
+        } else {
+          console.error('Failed to load dashboard info:', result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        console.error('Error loading dashboard info:', error);
+      })
+      .getDashboardInfo();
+  }
+
+
 </script>

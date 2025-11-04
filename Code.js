@@ -61,14 +61,14 @@ function logAccess(codeNum, userIP) {
   }
 }
 
-// 코드번호로 아이템 검색
+// 코드번호로 품목 검색
 function searchByCodeNum(codeNum) {
   try {
-    // 입력값 검증
+    // Input validation
     if (!codeNum || codeNum.toString().trim() === '') {
       return {
         success: false,
-        message: '코드번호를 입력해주세요.'
+        message: 'Please enter a code number.'
       };
     }
     
@@ -77,7 +77,7 @@ function searchByCodeNum(codeNum) {
     if (!sheet) {
       return {
         success: false,
-        message: 'ItemInfo 시트를 찾을 수 없습니다.'
+        message: 'ItemInfo sheet not found.'
       };
     }
     
@@ -87,12 +87,12 @@ function searchByCodeNum(codeNum) {
     if (lastRow < 2) {
       return {
         success: false,
-        message: '등록된 품목이 없습니다.'
+        message: 'No items registered.'
       };
     }
     
-    // 헤더(1행) 제외, 2행부터 lastRow까지, 1열부터 7열(StockNum)까지만 읽기
-    const dataRange = sheet.getRange(2, 1, lastRow - 1, 7);
+    // 헤더(1행) 제외, 2행부터 lastRow까지, 1열부터 9열(IsShortage)까지만 읽기
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, 9);
     const data = dataRange.getValues();
     
     const searchCode = codeNum.toString().trim();
@@ -113,7 +113,9 @@ function searchByCodeNum(codeNum) {
           codeNum: row[3],
           costB2B: row[4],
           costB2C: row[5],
-          stockNum: row[6]
+          stockNum: row[6],
+          shortageNum: row[7],     // ✅ NEW
+          isShortage: row[8]       // ✅ NEW
         },
         rowNumber: foundIndex + 2  // 실제 시트의 행 번호
       };
@@ -121,14 +123,14 @@ function searchByCodeNum(codeNum) {
     
     return {
       success: false,
-      message: '해당 코드번호를 찾을 수 없습니다: ' + searchCode
+      message: 'Code number not found: ' + searchCode
     };
     
   } catch (error) {
-    Logger.log('searchByCodeNum 오류: ' + error.toString());
+    Logger.log('searchByCodeNum error: ' + error.toString());
     return {
       success: false,
-      message: '검색 중 오류가 발생했습니다: ' + error.message
+      message: 'An error occurred during search: ' + error.message
     };
   }
 }
@@ -139,9 +141,14 @@ function getAllItems() {
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     const data = sheet.getDataRange().getValues();
     
+    Logger.log('Total rows: ' + data.length);
+
     const items = [];
     for (let i = 1; i < data.length; i++) {
       if (data[i][0]) {
+
+        //Logger.log('Row ' + i + ' IsShortage (column 8): ' + data[i][8]);
+        
         const item = {
           serialNum: data[i][0],
           name: data[i][1],
@@ -149,7 +156,9 @@ function getAllItems() {
           codeNum: data[i][3],
           costB2B: data[i][4],
           costB2C: data[i][5],
-          stockNum: data[i][6]
+          stockNum: data[i][6],
+          shortageNum: data[i][7],   // ✅ NEW
+          isShortage: data[i][8]     // ✅ NEW
         };
         items.push(item);
       }
@@ -867,6 +876,321 @@ function getOrderListByDate(orderDate) {
     return {
       success: false,
       message: '오류가 발생했습니다: ' + error.toString()
+    };
+  }
+}
+
+// ===== Memo Functions =====
+
+const MEMO_SHEET_NAME = 'Memo';
+
+// Get latest 10 memos
+function getLatestMemos() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(MEMO_SHEET_NAME);
+    
+    if (!sheet) {
+      // Create sheet if not exists
+      sheet = ss.insertSheet(MEMO_SHEET_NAME);
+      sheet.appendRow(['Date', 'Index', 'Content']);
+      Logger.log('Memo sheet created.');
+      
+      return {
+        success: true,
+        memos: []
+      };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    
+    if (data.length <= 1) {
+      return {
+        success: true,
+        memos: []
+      };
+    }
+    
+    const headers = data[0];
+    const dateColIndex = headers.indexOf('Date');
+    const indexColIndex = headers.indexOf('Index');
+    const contentColIndex = headers.indexOf('Content');
+    
+    if (dateColIndex === -1 || indexColIndex === -1 || contentColIndex === -1) {
+      return {
+        success: false,
+        message: 'Required columns not found in Memo sheet.'
+      };
+    }
+    
+    // Collect all memos with row numbers
+    const memos = [];
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][dateColIndex] && data[i][contentColIndex]) {
+        memos.push({
+          rowNumber: i + 1, // Actual sheet row number
+          date: data[i][dateColIndex],
+          index: data[i][indexColIndex],
+          content: data[i][contentColIndex]
+        });
+      }
+    }
+    
+    // Sort by date descending (latest first), then by index descending
+    memos.sort((a, b) => {
+      const dateA = parseInt(a.date.toString());
+      const dateB = parseInt(b.date.toString());
+      
+      if (dateB !== dateA) {
+        return dateB - dateA;
+      }
+      return b.index - a.index;
+    });
+    
+    // Return top 10
+    const latest10 = memos.slice(0, 10);
+    
+    return {
+      success: true,
+      memos: latest10
+    };
+    
+  } catch (error) {
+    Logger.log('Error getting memos: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred: ' + error.toString()
+    };
+  }
+}
+
+// Add new memo
+function addMemo(content) {
+  try {
+    if (!content || content.trim() === '') {
+      return {
+        success: false,
+        message: 'Memo content cannot be empty.'
+      };
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(MEMO_SHEET_NAME);
+    
+    if (!sheet) {
+      sheet = ss.insertSheet(MEMO_SHEET_NAME);
+      sheet.appendRow(['Date', 'Index', 'Content']);
+      Logger.log('Memo sheet created.');
+    }
+    
+    // Get today's date in YYYYMMDD format
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayDate = parseInt(year + month + day);
+    
+    // Find the next index for today
+    const data = sheet.getDataRange().getValues();
+    let maxIndex = 0;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] && parseInt(data[i][0].toString()) === todayDate) {
+        const currentIndex = parseInt(data[i][1]) || 0;
+        if (currentIndex > maxIndex) {
+          maxIndex = currentIndex;
+        }
+      }
+    }
+    
+    const newIndex = maxIndex + 1;
+    
+    // Add new memo
+    sheet.appendRow([todayDate, newIndex, content.trim()]);
+    
+    Logger.log(`Memo added - Date: ${todayDate}, Index: ${newIndex}`);
+    
+    return {
+      success: true,
+      message: 'Memo saved successfully.',
+      date: todayDate,
+      index: newIndex
+    };
+    
+  } catch (error) {
+    Logger.log('Error adding memo: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred while saving memo: ' + error.toString()
+    };
+  }
+}
+
+// Update memo
+function updateMemo(rowNumber, newContent) {
+  try {
+    if (!newContent || newContent.trim() === '') {
+      return {
+        success: false,
+        message: 'Memo content cannot be empty.'
+      };
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(MEMO_SHEET_NAME);
+    
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'Memo sheet not found.'
+      };
+    }
+    
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const contentColIndex = headers.indexOf('Content');
+    
+    if (contentColIndex === -1) {
+      return {
+        success: false,
+        message: 'Content column not found.'
+      };
+    }
+    
+    // Update the content
+    sheet.getRange(rowNumber, contentColIndex + 1).setValue(newContent.trim());
+    
+    Logger.log(`Memo updated - Row: ${rowNumber}`);
+    
+    return {
+      success: true,
+      message: 'Memo updated successfully.'
+    };
+    
+  } catch (error) {
+    Logger.log('Error updating memo: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred while updating memo: ' + error.toString()
+    };
+  }
+}
+
+// Delete memo
+function deleteMemo(rowNumber) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(MEMO_SHEET_NAME);
+    
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'Memo sheet not found.'
+      };
+    }
+    
+    // Delete the row
+    sheet.deleteRow(rowNumber);
+    
+    Logger.log(`Memo deleted - Row: ${rowNumber}`);
+    
+    return {
+      success: true,
+      message: 'Memo deleted successfully.'
+    };
+    
+  } catch (error) {
+    Logger.log('Error deleting memo: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred while deleting memo: ' + error.toString()
+    };
+  }
+}
+
+// ===== Dashboard Info Functions =====
+
+// Get today's dashboard info (order count and stock status)
+function getDashboardInfo() {
+  try {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayDate = parseInt(year + month + day);
+    
+    // Get today's order count
+    let orderCount = 0;
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const orderSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    
+    if (orderSheet) {
+      const orderData = orderSheet.getDataRange().getValues();
+      const headers = orderData[0];
+      const dateColIndex = headers.indexOf('Order_Date');
+      const indexColIndex = headers.indexOf('Order_Index');
+      
+      if (dateColIndex !== -1 && indexColIndex !== -1) {
+        const orderIndexSet = new Set();
+        
+        for (let i = 1; i < orderData.length; i++) {
+          const rowDate = orderData[i][dateColIndex];
+          const rowIndex = orderData[i][indexColIndex];
+          
+          if (rowDate && parseInt(rowDate.toString()) === todayDate) {
+            orderIndexSet.add(parseInt(rowIndex));
+          }
+        }
+        
+        orderCount = orderIndexSet.size;
+      }
+    }
+    
+    // Get stock status
+    let stockStatus = 2; // Default: 양호 (Good)
+    const itemSheet = ss.getSheetByName(SHEET_NAME);
+    
+    if (itemSheet) {
+      const itemData = itemSheet.getDataRange().getValues();
+      const headers = itemData[0];
+      const isShortageColIndex = headers.indexOf('IsShortage');
+      
+      if (isShortageColIndex !== -1) {
+        let hasOutOfStock = false;
+        let hasShortage = false;
+        
+        for (let i = 1; i < itemData.length; i++) {
+          const isShortage = itemData[i][isShortageColIndex];
+          
+          if (isShortage === 0) {
+            hasOutOfStock = true;
+            break; // 품절이 하나라도 있으면 경고
+          } else if (isShortage === 1) {
+            hasShortage = true;
+          }
+        }
+        
+        if (hasOutOfStock) {
+          stockStatus = 0; // 경고 (Critical)
+        } else if (hasShortage) {
+          stockStatus = 1; // 관심 (Warning)
+        } else {
+          stockStatus = 2; // 양호 (Good)
+        }
+      }
+    }
+    
+    return {
+      success: true,
+      todayDate: `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`,
+      orderCount: orderCount,
+      stockStatus: stockStatus // 0: 경고(품절), 1: 관심(부족), 2: 양호
+    };
+    
+  } catch (error) {
+    Logger.log('Error getting dashboard info: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred: ' + error.toString()
     };
   }
 }

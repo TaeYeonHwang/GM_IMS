@@ -14,10 +14,35 @@
       </div>
     </div>
 
-    <!-- Welcome Section -->
-    <div class="welcome-section">
-      <h2 class="welcome-title">시스템 메뉴</h2>
-      <p class="welcome-subtitle">원하는 메뉴를 선택하여 작업을 시작하세요</p>
+    <!-- Dashboard Info Section -->
+    <div class="dashboard-info-section">
+      <div class="dashboard-info-grid">
+        <div class="dashboard-info-item">
+          
+          <div class="dashboard-info-content">
+            <div class="dashboard-info-label">오늘의 날짜</div>
+            <div class="dashboard-info-value" id="dashboardDate">-</div>
+          </div>
+        </div>
+        
+        <div class="dashboard-info-item">
+          
+          <div class="dashboard-info-content">
+            <div class="dashboard-info-label">오늘의 주문 수</div>
+            <div class="dashboard-info-value" id="dashboardOrderCount">-</div>
+          </div>
+        </div>
+        
+        <div class="dashboard-info-item">
+          
+          <div class="dashboard-info-content">
+            <div class="dashboard-info-label">재고 현황</div>
+            <div class="dashboard-info-value" id="dashboardStockStatus">
+              <span class="loading-dot">로딩 중...</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Feature Cards Grid -->
@@ -41,6 +66,17 @@
         </div>
         <h3 class="feature-title">주문 관리</h3>
         <p class="feature-description">신규 주문서 생성 및 과거 주문 내역 조회</p>
+        <span class="feature-arrow">→</span>
+      </div>
+
+      <!-- Memo Card -->
+      <div class="feature-card feature-card-memo" onclick="showMemo()">
+        <div class="feature-card-line"></div>
+        <div class="feature-icon-wrapper">
+          <span class="feature-icon">📝</span>
+        </div>
+        <h3 class="feature-title">메모장</h3>
+        <p class="feature-description">간단한 메모를 작성하고 관리</p>
         <span class="feature-arrow">→</span>
       </div>
 

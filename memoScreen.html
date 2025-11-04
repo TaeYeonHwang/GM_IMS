@@ -1,0 +1,33 @@
+<div id="memoScreen" class="screen">
+  <div class="card">
+    <button class="btn btn-home" onclick="showMain()">← 홈으로</button>
+    <div class="header">
+      <div class="logo">📝</div>
+      <h1>메모장</h1>
+      <p class="subtitle" id="memoTodayDate">-</p>
+    </div>
+
+    <!-- New Memo Section -->
+    <div class="memo-write-section">
+      <label class="memo-section-label">✍️ 새 메모 작성</label>
+      <textarea 
+        id="memoTextarea" 
+        class="memo-textarea" 
+        placeholder="메모 내용을 입력하세요..."
+        rows="3"
+      ></textarea>
+      <button class="btn btn-primary btn-action-medium" onclick="saveMemo()">
+        💾 저장하기
+      </button>
+    </div>
+
+    <!-- Memo Message -->
+    <div id="memoMessage"></div>
+
+    <!-- Memo List Section -->
+    <div class="memo-list-section">
+      <h3 class="memo-section-label">📋 최근 메모</h3>
+      <div id="memoListContainer"></div>
+    </div>
+  </div>
+</div>

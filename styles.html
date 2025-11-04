@@ -43,7 +43,7 @@
   #mainScreen .feature-card {
     padding: clamp(20px, 3vw, 30px);  /* 기존 25px-35px에서 감소 */
   }
-  
+
   .screen {
     display: none;
     animation: fadeIn 0.3s ease-in;
@@ -887,61 +887,6 @@
     background: #f8f9fa;
   }
 
-  /* Mobile Responsive */
-  @media (max-width: 768px) {
-    body {
-      padding: 10px;
-    }
-
-    .container {
-      max-width: 100%;
-      padding: 0;
-    }
-
-    .card {
-      padding: 15px 10px;
-      border-radius: 12px;
-    }
-
-    .header {
-      margin-bottom: 25px;
-    }
-
-    .top-bar {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 25px;
-    }
-
-    .order-header {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .item-card-new .info-grid {
-      grid-template-columns: 1fr;
-      gap: 6px;
-    }
-
-    #videoElement, #qrVideoElement, #orderQRVideoElement {
-      height: 300px;
-    }
-  }
-
-  /* Tablet */
-  @media (min-width: 769px) and (max-width: 1024px) {
-    .container {
-      max-width: 90%;
-    }
-  }
-
-  /* Desktop */
-  @media (min-width: 1025px) {
-    .container {
-      max-width: 1100px;
-    }
-  }
-
   /* ====================================
    추가할 CSS - styles.html 맨 아래에 추가
    ==================================== */
@@ -1097,18 +1042,303 @@
     transform: translateX(0);
   }
 
-  /* Mobile Responsive */
-  @media (max-width: 768px) {
-    .feature-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  /* ✅ NEW: Large action button class */
+  /* Large action button class */
   .btn-action-large {
     min-height: clamp(100px, 10vh, 120px);
     font-size: clamp(24px, 3.5vw, 32px);
     padding: clamp(30px, 3vw, 38px);
   }
+
+  /* ====================================
+   Memo Styles
+   ==================================== */
+
+  .memo-write-section {
+    background: white;
+    padding: clamp(20px, 3vw, 25px);
+    border-radius: 12px;
+    margin: clamp(15px, 2vw, 20px) 0;
+    border: 2px solid #e8ecef;
+  }
+
+  .memo-section-label {
+    font-size: clamp(18px, 2.5vw, 22px);
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    display: block;
+  }
+
+  .memo-textarea {
+    width: 100%;
+    padding: clamp(12px, 2vw, 15px);
+    border: 2px solid #e8ecef;
+    border-radius: 8px;
+    font-size: clamp(16px, 2.5vw, 18px);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    transition: all 0.3s ease;
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+  }
+
+  .memo-textarea:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  }
+
+  .memo-list-section {
+    margin-top: clamp(20px, 3vw, 30px);
+  }
+
+  .memo-card {
+    background: white;
+    padding: clamp(18px, 2.5vw, 22px);
+    border-radius: 12px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 2px solid #e8ecef;
+    border-left: 5px solid #3498db;
+    transition: all 0.3s ease;
+  }
+
+  .memo-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .memo-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .memo-date {
+    font-size: clamp(14px, 2vw, 16px);
+    color: #7f8c8d;
+    font-weight: 600;
+    font-family: monospace;
+  }
+
+  .memo-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-memo-action {
+    background: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #e8ecef;
+    padding: clamp(6px, 1vw, 8px) clamp(10px, 1.5vw, 12px);
+    border-radius: 6px;
+    font-size: clamp(13px, 1.8vw, 15px);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-memo-action:hover {
+    background: #e8ecef;
+    transform: translateY(-1px);
+  }
+
+  .memo-content {
+    color: #2c3e50;
+    font-size: clamp(15px, 2.2vw, 18px);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .memo-edit-area {
+    margin-top: 10px;
+  }
+
+  /* Feature card memo color */
+  .feature-card-memo .feature-card-line {
+    background: linear-gradient(90deg, #f39c12, #e67e22);
+  }
+
+  .feature-card-memo:hover .feature-icon-wrapper {
+    background: #fff3e0;
+  }
+
+  .feature-card-memo .feature-arrow {
+    color: #f39c12;
+  }
+
+  /* ====================================
+   Dashboard Info Section
+   ==================================== */
+
+  .dashboard-info-section {
+    background: white;
+    border-radius: 16px;
+    padding: clamp(25px, 3.5vw, 35px);
+    margin-bottom: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 2px solid #e8ecef;
+  }
+
+  .dashboard-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: clamp(20px, 3vw, 30px);
+  }
+
+  .dashboard-info-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: clamp(15px, 2.5vw, 20px);
+    background: #f8f9fa;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+  }
+
+  .dashboard-info-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .dashboard-info-icon {
+    font-size: clamp(32px, 5vw, 42px);
+    flex-shrink: 0;
+  }
+
+  .dashboard-info-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dashboard-info-label {
+    font-size: clamp(14px, 2vw, 16px);
+    color: #7f8c8d;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .dashboard-info-value {
+    font-size: clamp(20px, 3vw, 26px);
+    color: #2c3e50;
+    font-weight: 700;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: clamp(16px, 2.5vw, 20px);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .status-critical {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+
+  .status-warning {
+    background: #ffedd5;
+    color: #ea580c;
+  }
+
+  .status-good {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+
+  .loading-dot {
+    font-size: clamp(14px, 2vw, 16px);
+    color: #7f8c8d;
+    font-weight: 400;
+  }
+
+
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+    body {
+      padding: 10px;
+    }
+
+    .container {
+      max-width: 100%;
+      padding: 0;
+    }
+
+    .card {
+      padding: 15px 10px;
+      border-radius: 12px;
+    }
+
+    .header {
+      margin-bottom: 25px;
+    }
+
+    .top-bar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+
+    .order-header {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .item-card-new .info-grid {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+
+    #videoElement, #qrVideoElement, #orderQRVideoElement {
+      height: 300px;
+    }
+
+    .feature-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .dashboard-info-section {
+      padding: 20px 15px;
+      margin-bottom: 20px;
+    }
+    
+    .dashboard-info-grid {
+      grid-template-columns: 1fr;
+      gap: 15px;
+    }
+    
+    .dashboard-info-item {
+      padding: 15px;
+    }
+    
+    #mainScreen .dashboard-info-section {
+      padding: 20px 12px;
+    }
+
+  }
+
+  /* Tablet */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .container {
+      max-width: 90%;
+    }
+  }
+
+  /* Desktop */
+  @media (min-width: 1025px) {
+    .container {
+      max-width: 1100px;
+    }
+  }
+
+
 
 </style>
