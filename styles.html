@@ -523,7 +523,7 @@
   }
 
   /* Scanner Containers */
-  #scannerContainer, #qrScannerContainer, #orderQRScannerContainer {
+  #scannerContainer, #qrScannerContainer, #orderQRScannerContainer, #inventoryQRScannerContainer {
     margin: 15px 0;
     border-radius: 12px;
     overflow: hidden;
@@ -533,7 +533,7 @@
     border: 2px solid #e8ecef;
   }
 
-  #videoElement, #qrVideoElement, #orderQRVideoElement {
+  #videoElement, #qrVideoElement, #orderQRVideoElement, #inventoryQRVideoElement {
     width: 100%;
     max-width: 100%;
     height: 400px;
@@ -1260,6 +1260,64 @@
     font-weight: 400;
   }
 
+  /* ====================================
+   Inventory Search Section
+   ==================================== */
+
+  .inventory-search-section {
+    background: white;
+    padding: clamp(20px, 3vw, 25px);
+    border-radius: 12px;
+    margin: clamp(15px, 2vw, 20px) 0;
+    border: 2px solid #e8ecef;
+  }
+
+  .inventory-search-label {
+    font-size: clamp(18px, 2.5vw, 22px);
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .inventory-search-input-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+
+  .inventory-search-input {
+    flex: 1;
+    padding: clamp(12px, 2vw, 15px);
+    border: 2px solid #e8ecef;
+    border-radius: 8px;
+    font-size: clamp(16px, 2.5vw, 18px);
+    transition: all 0.3s ease;
+  }
+
+  .inventory-search-input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  }
+
+  .inventory-search-info {
+    color: #7f8c8d;
+    font-size: clamp(14px, 2vw, 16px);
+    margin-top: 10px;
+    text-align: center;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+  }
+
+  .inventory-search-info strong {
+    color: #3498db;
+    font-weight: 700;
+  }
+
+
 
   /* Mobile Responsive */
   @media (max-width: 768px) {
@@ -1323,6 +1381,14 @@
       padding: 20px 12px;
     }
 
+    .inventory-search-input-group {
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .inventory-search-input-group .btn {
+      width: 100%;
+    }
   }
 
   /* Tablet */

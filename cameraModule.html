@@ -2,9 +2,8 @@
   // ===== 여기부터 추가 =====
 const CameraModule = {
   streams: {
-    barcode: null,
-    qr: null,
-    orderQR: null
+    orderQR: null,      // 주문서에서 사용.
+    inventoryQR: null   // 재고 조회에서 사용.
   },
   
   async start(type, config) {

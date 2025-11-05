@@ -6,6 +6,9 @@
   let orderItems = [];
   let currentOrderType = 'b2c';
   let isNavigating = false; // Browser history navigation support
+  // ===== Inventory List Variables =====
+  let allInventoryItems = [];  // 전체 1500개 저장
+  let inventorySearchText = '';
 
   // Handle browser back button
   window.addEventListener('popstate', function(event) {
@@ -24,8 +27,6 @@
       }
       
       // Stop cameras
-      stopCamera();
-      stopQRCamera();
       stopOrderQRCamera();
       
       // Special handling for certain screens
@@ -133,10 +134,11 @@
   }
 
   function hideAllScreens() {
-    ['mainScreen', 'inventoryMenuScreen', 'searchMenuScreen', 'searchScreen', 'qrSearchScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen', 'memoScreen'].forEach(id => {
+    ['mainScreen', 'inventoryMenuScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen', 'memoScreen'].forEach(id => {
       document.getElementById(id).style.display = 'none';
       document.getElementById(id).classList.remove('active');
     });
+
   }
 
   function showMain() {
@@ -144,8 +146,6 @@
     const s = document.getElementById('mainScreen');
     s.style.display = 'block';
     s.classList.add('active');
-    stopCamera();
-    stopQRCamera();
     stopOrderQRCamera();
     loadDashboardInfo(); // Reload dashboard info when returning to main
     navigateToScreen('mainScreen');
@@ -156,8 +156,6 @@
     const s = document.getElementById('inventoryMenuScreen');
     s.style.display = 'block';
     s.classList.add('active');
-    stopCamera();
-    stopQRCamera();
     stopOrderQRCamera();
     navigateToScreen('inventoryMenuScreen');
   }
@@ -167,20 +165,7 @@
     const s = document.getElementById('orderMenuScreen');
     s.style.display = 'block';
     s.classList.add('active');
-    stopCamera();
-    stopQRCamera();
     stopOrderQRCamera();
-  }
-
-  function showSearchMenu() {
-    hideAllScreens();
-    const s = document.getElementById('searchMenuScreen');
-    s.style.display = 'block';
-    s.classList.add('active');
-    stopCamera();
-    stopQRCamera();
-    stopOrderQRCamera();
-    navigateToScreen('searchMenuScreen');
   }
 
   function showOrderMain() {
@@ -188,8 +173,6 @@
     const s = document.getElementById('orderMainScreen');
     s.style.display = 'block';
     s.classList.add('active');
-    stopCamera();
-    stopQRCamera();
     stopOrderQRCamera();
     
     // 디버그 로그 초기화
@@ -1172,45 +1155,20 @@
     }
   }
 
-  function showSearch() {
-    hideAllScreens();
-    const s = document.getElementById('searchScreen');
-    s.style.display = 'block';
-    s.classList.add('active');
-    document.getElementById('barcodeInput').value = '';
-    document.getElementById('searchResult').innerHTML = '';
-    clearDebugLog();
-    stopCamera();
-    stopQRCamera();
-    stopOrderQRCamera();
-    navigateToScreen('searchScreen');
-  }
-
-  function showQRSearch() {
-    hideAllScreens();
-    const s = document.getElementById('qrSearchScreen');
-    s.style.display = 'block';
-    s.classList.add('active');
-    const inputElement = document.getElementById('qrInput');
-    inputElement.value = '';
-    document.getElementById('qrSearchResult').innerHTML = '';
-    clearQRDebugLog();
-    stopCamera();
-    stopQRCamera();
-    stopOrderQRCamera();
-    
-    setTimeout(() => {
-      inputElement.focus();
-    }, 100);
-
-    navigateToScreen('qrSearchScreen');
-  }
-
-  function showAllItems() {
+  // ===== Modified: showInventoryList function =====
+  function showInventoryList() {
     hideAllScreens();
     const s = document.getElementById('listScreen');
     s.style.display = 'block';
     s.classList.add('active');
+    stopOrderQRCamera();
+    stopInventoryQRCamera();  // ✅ NEW
+    
+    // Reset search
+    inventorySearchText = '';
+    document.getElementById('inventorySearchInput').value = '';
+    document.getElementById('inventorySearchInfo').innerHTML = '<div class="loading-dot">로딩 중...</div>';
+    
     loadAllItems();
     navigateToScreen('listScreen');
   }
@@ -1220,8 +1178,6 @@
     const s = document.getElementById('guideScreen');
     s.style.display = 'block';
     s.classList.add('active');
-    stopCamera();
-    stopQRCamera();
     stopOrderQRCamera();
     loadGuideImage();
     navigateToScreen('guideScreen');
@@ -1315,25 +1271,6 @@
     history.replaceState({ screen: 'mainScreen' }, '', '#mainScreen');
   });
 
-  function searchBarcode() {
-    const c = document.getElementById('barcodeInput').value.trim();
-    if (!c) {
-      showError('searchResult', '코드 번호를 입력해주세요.');
-      return;
-    }
-    showLoading('searchResult');
-    
-    google.script.run
-      .withSuccessHandler(function(result) {
-        displaySearchResult(result);
-        if (result.success) {
-          logCodeNumAccess(c);
-        }
-      })
-      .withFailureHandler(e => showError('searchResult', '검색 중 오류: ' + e))
-      .searchByCodeNum(c);
-  }
-  
   async function logCodeNumAccess(codeNum) {
     const userIP = await fetchUserIP();
     
@@ -1351,75 +1288,26 @@
       .logAccess(codeNum, userIP);
   }
 
-  function displaySearchResult(r) {
-    const c = document.getElementById('searchResult');
-    if (r.success) {
-      const i = r.item;
-
-      // Helper function to get stock status
-      function getStockClass(isShortage) {
-        if (isShortage === 0) return 'out';      // 품절
-        if (isShortage === 1) return 'low';      // 부족
-        return 'sufficient';                      // 양호
-      }
-
-      function getStockText(isShortage) {
-        if (isShortage === 0) return '품절';
-        if (isShortage === 1) return '부족';
-        return '양호';
-      }
-
-      const stockClass = getStockClass(i.isShortage);
-      const stockText = getStockText(i.isShortage);
-
-      // Header with name and stock badge
-      html += '<div class="card-header">';
-      html += '<h4>' + (i.name || '-') + '</h4>';
-      html += '<span class="stock-badge ' + stockClass + '">' + stockText + '</span>';
-      html += '</div>';
-      
-      // Description
-      html += '<p class="description">' + (i.description || '-') + '</p>';
-      
-      // Info grid (2x2)
-      html += '<div class="info-grid">';
-      
-      // Code number
-      html += '<div>';
-      html += '<span class="label">코드번호:</span> ';
-      html += '<span class="value code">' + (i.codeNum || '-') + '</span>';
-      html += '</div>';
-      
-      // Stock
-      html += '<div>';
-      html += '<span class="label">재고:</span> ';
-      html += '<span class="value stock-value ' + stockClass + '">' + (i.stockNum ?? '-') + '개</span>';
-      html += '</div>';
-      
-      // B2B price
-      html += '<div>';
-      html += '<span class="label">도매가:</span> ';
-      html += '<span class="value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span>';
-      html += '</div>';
-      
-      // B2C price
-      html += '<div>';
-      html += '<span class="label">소매가:</span> ';
-      html += '<span class="value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span>';
-      html += '</div>';
-      
-      html += '</div>'; // End info-grid
-      html += '</div>'; // End item-card-new
-      
-      c.innerHTML = html;
-    } else {
-      showError('searchResult', r.message);
-    }
-  }
-
+  // ===== Modified: loadAllItems function =====
   function loadAllItems() {
     showLoading('itemList');
-    google.script.run.withSuccessHandler(displayAllItems).withFailureHandler(e => showError('itemList', '목록 로드 오류: ' + e)).getAllItems();
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          allInventoryItems = result.items;
+          inventorySearchText = '';
+          
+          // ✅ Changed: 전체 다 표시
+          renderInventoryItems(allInventoryItems);
+          
+          // 카운트 업데이트
+          updateInventorySearchInfo(allInventoryItems.length, allInventoryItems.length);
+        } else {
+          showError('itemList', result.message);
+        }
+      })
+      .withFailureHandler(e => showError('itemList', '목록 로드 오류: ' + e))
+      .getAllItems();
   }
 
   function displayAllItems(r) {
@@ -1513,250 +1401,6 @@
     c.innerHTML = html;
   }
 
-  function filterItems() {
-    const f = document.getElementById('filterInput').value.toLowerCase();
-    const filtered = allItems.filter(i => i.name.toLowerCase().includes(f) || i.codeNum.toString().includes(f) || i.description.toLowerCase().includes(f) || i.serialNum.toString().includes(f));
-    renderItems(filtered);
-  }
-
-  async function startCameraScan() {
-    clearDebugLog();
-    debugLog('카메라 스캔 시작');
-    
-    await CameraModule.start('barcode', {
-      videoElement: document.getElementById('videoElement'),
-      containerElement: document.getElementById('scannerContainer'),
-      buttonTextElement: document.getElementById('cameraBtnText'),
-      captureButtonElement: document.getElementById('captureBtn'),
-      resultElement: document.getElementById('searchResult')
-    });
-  }
-
-  async function captureAndDecode() {
-    debugLog('바코드 캡처 시작');
-    
-    try {
-      // ✅ 이 부분이 CameraModule.captureImage()로 교체됨
-      const imageData = CameraModule.captureImage(
-        document.getElementById('videoElement'),
-        document.getElementById('canvas')
-      );
-      debugLog('✓ 이미지 캡처 완료', 'success');
-      const img = c.toDataURL('image/png');
-      showLoading('searchResult');
-      debugLog('Quagga 바코드 인식 시작...');
-      
-      Quagga.decodeSingle({src: img, numOfWorkers: 0, locate: true, decoder: {readers: ['code_39_reader', 'code_39_vin_reader', 'ean_8_reader', 'ean_reader', 'code_128_reader', 'codabar_reader', 'upc_reader', 'upc_e_reader', 'i2of5_reader']}}, function(r) {
-        if (r && r.codeResult) {
-          debugLog('✓ 바코드 인식 성공: ' + r.codeResult.code, 'success');
-          document.getElementById('barcodeInput').value = r.codeResult.code;
-          stopCamera();
-          document.getElementById('searchResult').innerHTML = '<div class="alert alert-info">✅ 바코드 인식 성공: <strong>' + r.codeResult.code + '</strong></div>';
-          setTimeout(() => searchBarcode(), 500);
-        } else {
-          debugLog('✗ 바코드를 찾을 수 없음', 'error');
-          showError('searchResult', '바코드를 인식할 수 없습니다.<br>• 바코드를 녹색 영역에 맞춰주세요<br>• 조명을 밝게 해주세요');
-        }
-      });
-    } catch (e) {
-      debugLog('✗ 오류: ' + e.message, 'error');
-      showError('searchResult', '바코드 인식 중 오류가 발생했습니다.');
-    }
-  }
-
-  function stopCamera() {
-    debugLog('카메라 끄기');
-    CameraModule.stop('barcode', {
-      videoElement: document.getElementById('videoElement'),
-      containerElement: document.getElementById('scannerContainer'),
-      captureButtonElement: document.getElementById('captureBtn'),
-      buttonTextElement: document.getElementById('cameraBtnText')
-    });
-  }
-
-  function searchQR() {
-    const inputElement = document.getElementById('qrInput');
-    const q = inputElement.value.trim();
-    
-    if (!q) {
-      showError('qrSearchResult', 'QR 코드 번호를 입력해주세요.');
-      inputElement.focus();
-      return;
-    }
-    
-    showLoading('qrSearchResult');
-    
-    google.script.run
-      .withSuccessHandler(function(result) {
-        displayQRSearchResult(result);
-        inputElement.value = '';
-        inputElement.focus();
-        
-        if (result.success) {
-          logCodeNumAccess(q);
-        }
-      })
-      .withFailureHandler(function(e) {
-        showError('qrSearchResult', '검색 중 오류: ' + e);
-        inputElement.value = '';
-        inputElement.focus();
-      })
-      .searchByCodeNum(q);
-  }
-
-  function displayQRSearchResult(r) {
-    const c = document.getElementById('qrSearchResult');
-    if (r.success) {
-      const i = r.item;
-      
-      // Helper function to get stock status
-      function getStockClass(isShortage) {
-        if (isShortage === 0) return 'out';
-        if (isShortage === 1) return 'low';
-        return 'sufficient';
-      }
-      
-      function getStockText(isShortage) {
-        if (isShortage === 0) return '품절';
-        if (isShortage === 1) return '부족';
-        return '양호';
-      }
-
-      const stockClass = getStockClass(i.isShortage);
-      const stockText = getStockText(i.isShortage);
-      
-      let html = '<div class="item-card-new">';
-
-      // Header with name and stock badge
-      html += '<div class="card-header">';
-      html += '<h4>' + (i.name || '-') + '</h4>';
-      html += '<span class="stock-badge ' + stockClass + '">' + stockText + '</span>';
-      html += '</div>';
-      
-      // Description
-      html += '<p class="description">' + (i.description || '-') + '</p>';
-      
-      // Info grid (2x2)
-      html += '<div class="info-grid">';
-      
-      // Code number
-      html += '<div>';
-      html += '<span class="label">코드번호:</span> ';
-      html += '<span class="value code">' + (i.codeNum || '-') + '</span>';
-      html += '</div>';
-      
-      // Stock
-      html += '<div>';
-      html += '<span class="label">재고:</span> ';
-      html += '<span class="value stock-value ' + stockClass + '">' + (i.stockNum ?? '-') + '개</span>';
-      html += '</div>';
-      
-      // B2B price
-      html += '<div>';
-      html += '<span class="label">도매가:</span> ';
-      html += '<span class="value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span>';
-      html += '</div>';
-      
-      // B2C price
-      html += '<div>';
-      html += '<span class="label">소매가:</span> ';
-      html += '<span class="value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span>';
-      html += '</div>';
-      
-      html += '</div>'; // End info-grid
-      html += '</div>'; // End item-card-new
-      
-      c.innerHTML = html;
-    } else {
-      showError('qrSearchResult', r.message);
-    }
-  }
-
-  async function startQRScan() {
-    clearQRDebugLog();
-    qrDebugLog('QR 스캔 시작');
-    
-    await CameraModule.start('qr', {
-      videoElement: document.getElementById('qrVideoElement'),
-      containerElement: document.getElementById('qrScannerContainer'),
-      buttonTextElement: document.getElementById('qrBtnText'),
-      captureButtonElement: document.getElementById('qrCaptureBtn'),
-      resultElement: document.getElementById('qrSearchResult')
-    });
-  }
-
-  async function captureAndDecodeQR() {
-    qrDebugLog('QR 코드 캡처 시작');
-
-    try {
-      const imgData = CameraModule.captureImage(
-        document.getElementById('qrVideoElement'),
-        document.getElementById('qrCanvas')
-      );
-      
-      qrDebugLog('✓ 이미지 캡처 완료', 'success');
-      showLoading('qrSearchResult');
-      qrDebugLog('jsQR로 QR 코드 인식 시작...');
-      qrDebugLog('ImageData 추출 완료');
-      if (typeof jsQR === 'undefined') {
-        qrDebugLog('jsQR 라이브러리 로딩 중...');
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
-        s.onload = () => {
-          qrDebugLog('jsQR 라이브러리 로드 완료');
-          decodeQRFromImageData(imgData);
-        };
-        s.onerror = () => {
-          qrDebugLog('✗ jsQR 라이브러리 로드 실패', 'error');
-          showError('qrSearchResult', 'QR 라이브러리를 로드할 수 없습니다.');
-        };
-        document.head.appendChild(s);
-      } else {
-        decodeQRFromImageData(imgData);
-      }
-    } catch (e) {
-      qrDebugLog('✗ 오류: ' + e.message, 'error');
-      showError('qrSearchResult', 'QR 코드 인식 중 오류가 발생했습니다.');
-    }
-  }
-
-  function decodeQRFromImageData(imgData) {
-    qrDebugLog('QR 코드 디코딩 시도...');
-    const inputElement = document.getElementById('qrInput');
-    
-    try {
-      const code = jsQR(imgData.data, imgData.width, imgData.height, {inversionAttempts: "dontInvert"});
-      if (code) {
-        qrDebugLog('✓ QR 코드 인식 성공: ' + code.data, 'success');
-        inputElement.value = code.data;
-        stopQRCamera();
-        document.getElementById('qrSearchResult').innerHTML = '<div class="alert alert-info">✅ QR 코드 인식 성공: <strong>' + code.data + '</strong></div>';
-        qrDebugLog('자동 검색 시작...');
-        setTimeout(() => {
-          searchQR();
-        }, 500);
-      } else {
-        qrDebugLog('✗ QR 코드를 찾을 수 없음', 'error');
-        showError('qrSearchResult', 'QR 코드를 인식할 수 없습니다.<br>• QR 코드를 녹색 영역에 맞춰주세요<br>• 조명을 밝게 해주세요');
-        inputElement.focus();
-      }
-    } catch (e) {
-      qrDebugLog('✗ QR 디코딩 오류: ' + e.message, 'error');
-      showError('qrSearchResult', 'QR 코드 디코딩 중 오류가 발생했습니다.');
-      inputElement.focus();
-    }
-  }
-
-  function stopQRCamera() {
-    qrDebugLog('카메라 끄기');
-    CameraModule.stop('qr', {
-      videoElement: document.getElementById('qrVideoElement'),
-      containerElement: document.getElementById('qrScannerContainer'),
-      captureButtonElement: document.getElementById('qrCaptureBtn'),
-      buttonTextElement: document.getElementById('qrBtnText')
-    });
-  }
-
   function showLoading(id) {
     document.getElementById(id).innerHTML = '<div class="loading"><div class="spinner"></div><div>로딩 중...</div></div>';
   }
@@ -1834,13 +1478,6 @@
     tableHTML += '</tbody></table></div>';
     container.innerHTML = tableHTML;
   }
-
-  function handleQRInputEnter(event) {
-    if (event.key === 'Enter' || event.keyCode === 13) {
-      event.preventDefault();
-      searchQR();
-    }
-  }
   
   // ===== Memo Functions =====
   function showMemo() {
@@ -1848,8 +1485,6 @@
     const s = document.getElementById('memoScreen');
     s.style.display = 'block';
     s.classList.add('active');
-    stopCamera();
-    stopQRCamera();
     stopOrderQRCamera();
     
     // Set today's date
@@ -2063,6 +1698,191 @@
         console.error('Error loading dashboard info:', error);
       })
       .getDashboardInfo();
+  }
+
+  // ===== NEW: handleInventorySearch function =====
+  function handleInventorySearch() {
+    const searchInput = document.getElementById('inventorySearchInput');
+    inventorySearchText = searchInput.value.trim().toLowerCase();
+    
+    if (inventorySearchText === '') {
+      // ✅ Changed: 검색어 없으면 전체 표시
+      renderInventoryItems(allInventoryItems);
+      updateInventorySearchInfo(allInventoryItems.length, allInventoryItems.length);
+    } else {
+      // 전체에서 필터링
+      const filtered = allInventoryItems.filter(item => 
+        (item.name && item.name.toLowerCase().includes(inventorySearchText)) ||
+        (item.codeNum && item.codeNum.toString().includes(inventorySearchText)) ||
+        (item.description && item.description.toLowerCase().includes(inventorySearchText))
+      );
+      
+      renderInventoryItems(filtered);
+      updateInventorySearchInfo(filtered.length, allInventoryItems.length);
+    }
+  }
+
+  // ===== NEW: renderInventoryItems function =====
+  function renderInventoryItems(items) {
+    const c = document.getElementById('itemList');
+    if (items.length === 0) {
+      c.innerHTML = '<div class="alert alert-info">검색 결과가 없습니다.</div>';
+      return;
+    }
+    
+    // Helper functions
+    function getStockClass(isShortage) {
+      if (isShortage === undefined || isShortage === null || isShortage === '') {
+        return 'sufficient';
+      }
+      if (isShortage === 0) return 'out';
+      if (isShortage === 1) return 'low';
+      return 'sufficient';
+    }
+    
+    function getStockText(isShortage) {
+      if (isShortage === undefined || isShortage === null || isShortage === '') {
+        return '양호';
+      }
+      if (isShortage === 0) return '품절';
+      if (isShortage === 1) return '부족';
+      return '양호';
+    }
+    
+    let html = '<div class="item-list">';
+    items.forEach(function(i) {
+      const stockClass = getStockClass(i.isShortage);
+      const stockText = getStockText(i.isShortage);
+      
+      html += '<div class="item-card-new">';
+      
+      // Header with name and stock badge
+      html += '<div class="card-header">';
+      html += '<h4>' + (i.name || '-') + '</h4>';
+      html += '<span class="stock-badge ' + stockClass + '">' + stockText + '</span>';
+      html += '</div>';
+      
+      // Description
+      html += '<p class="description">' + (i.description || '-') + '</p>';
+      
+      // Info grid (2x2)
+      html += '<div class="info-grid">';
+      
+      // Code number
+      html += '<div>';
+      html += '<span class="label">코드번호:</span> ';
+      html += '<span class="value code">' + (i.codeNum || '-') + '</span>';
+      html += '</div>';
+      
+      // Stock
+      html += '<div>';
+      html += '<span class="label">재고:</span> ';
+      html += '<span class="value stock-value ' + stockClass + '">' + (i.stockNum ?? '-') + '개</span>';
+      html += '</div>';
+      
+      // B2B price
+      html += '<div>';
+      html += '<span class="label">도매가:</span> ';
+      html += '<span class="value">' + (i.costB2B ? i.costB2B.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      // B2C price
+      html += '<div>';
+      html += '<span class="label">소매가:</span> ';
+      html += '<span class="value">' + (i.costB2C ? i.costB2C.toLocaleString() + '원' : '-') + '</span>';
+      html += '</div>';
+      
+      html += '</div>'; // End info-grid
+      html += '</div>'; // End item-card-new
+    });
+    html += '</div>';
+    
+    c.innerHTML = html;
+  }
+
+  // ===== NEW: updateInventorySearchInfo function =====
+  function updateInventorySearchInfo(displayCount, totalCount) {
+    const infoDiv = document.getElementById('inventorySearchInfo');
+  
+    if (inventorySearchText === '') {
+      // ✅ Changed: 전체 표시 중
+      infoDiv.innerHTML = '전체 <strong>' + totalCount + '</strong>개';
+    } else {
+      // 검색 결과
+      infoDiv.innerHTML = '검색 결과: <strong>' + displayCount + '</strong>개 / 전체 <strong>' + totalCount + '</strong>개';
+    }
+  }
+
+  // ===== NEW: QR Scanner for Inventory =====
+  function toggleInventoryQRScanner() {
+    const container = document.getElementById('inventoryQRScannerContainer');
+    const btnText = document.getElementById('inventoryQRBtnText');
+    const captureBtn = document.getElementById('inventoryQRCaptureBtn');
+    
+    if (container.style.display === 'block') {
+      stopInventoryQRCamera();
+    } else {
+      startInventoryQRCamera();
+    }
+  }
+
+  async function startInventoryQRCamera() {
+    await CameraModule.start('inventoryQR', {
+      videoElement: document.getElementById('inventoryQRVideoElement'),
+      containerElement: document.getElementById('inventoryQRScannerContainer'),
+      buttonTextElement: document.getElementById('inventoryQRBtnText'),
+      captureButtonElement: document.getElementById('inventoryQRCaptureBtn'),
+      resultElement: null
+    });
+  }
+
+  function stopInventoryQRCamera() {
+    CameraModule.stop('inventoryQR', {
+      videoElement: document.getElementById('inventoryQRVideoElement'),
+      containerElement: document.getElementById('inventoryQRScannerContainer'),
+      captureButtonElement: document.getElementById('inventoryQRCaptureBtn'),
+      buttonTextElement: document.getElementById('inventoryQRBtnText')
+    });
+  }
+
+  async function captureInventoryQR() {
+    try {
+      const imgData = CameraModule.captureImage(
+        document.getElementById('inventoryQRVideoElement'),
+        document.getElementById('inventoryQRCanvas')
+      );
+      
+      if (typeof jsQR === 'undefined') {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+        s.onload = () => {
+          decodeInventoryQR(imgData);
+        };
+        s.onerror = () => {
+          alert('QR 라이브러리를 로드할 수 없습니다.');
+        };
+        document.head.appendChild(s);
+      } else {
+        decodeInventoryQR(imgData);
+      }
+    } catch (e) {
+      alert('QR 코드 인식 중 오류가 발생했습니다.');
+    }
+  }
+
+  function decodeInventoryQR(imgData) {
+    try {
+      const code = jsQR(imgData.data, imgData.width, imgData.height, {inversionAttempts: "dontInvert"});
+      if (code) {
+        document.getElementById('inventorySearchInput').value = code.data;
+        stopInventoryQRCamera();
+        handleInventorySearch();
+      } else {
+        alert('QR 코드를 인식할 수 없습니다. 다시 시도해주세요.');
+      }
+    } catch (e) {
+      alert('QR 코드 디코딩 중 오류가 발생했습니다.');
+    }
   }
 
 
