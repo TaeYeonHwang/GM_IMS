@@ -1194,3 +1194,126 @@ function getDashboardInfo() {
     };
   }
 }
+
+function getOrdersByDateRange(startDate, endDate) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'PurchaseOrder sheet not found.'
+      };
+    }
+
+    const data = sheet.getDataRange().getValues();
+
+    if (data.length <= 1) {
+      return {
+        success: true,
+        orders: []
+      };
+    }
+
+    const headers = data[0];
+    const colIndices = {};
+    const requiredCols = [
+      'Order_SerialNumber', 'Order_Date', 'Order_Time', 'Order_Index', 
+      'Order_CodeNum', 'Order_Name', 'Order_Description', 
+      'Order_CostB2B', 'Order_CostB2C', 'Order_IsB2B', 'Order_Cnt', 
+      'PayType', 'Order_TotalCost', 'IsCanceled'
+    ];
+
+    requiredCols.forEach(col => {
+      const index = headers.indexOf(col);
+      if (index !== -1) {
+        colIndices[col] = index;
+      }
+    });
+
+    const startDateInt = parseInt(startDate);
+    const endDateInt = parseInt(endDate);
+
+    // Collect all orders in date range
+    const ordersMap = {}; // Group by serial number
+
+    for (let i = 1; i < data.length; i++) {
+      const rowDate = parseInt(data[i][colIndices['Order_Date']]);
+      
+      if (rowDate >= startDateInt && rowDate <= endDateInt) {
+        const serialNumber = data[i][colIndices['Order_SerialNumber']].toString();
+        
+        // Format order time
+        let orderTime = data[i][colIndices['Order_Time']];
+        if (orderTime instanceof Date) {
+          orderTime = Utilities.formatDate(orderTime, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+        } else if (orderTime) {
+          orderTime = orderTime.toString();
+        } else {
+          orderTime = '-';
+        }
+        
+        // Check if canceled
+        const canceledValue = data[i][colIndices['IsCanceled']];
+        const isCanceled = canceledValue === '취소';
+        
+        const order = {
+          serialNumber: serialNumber,
+          date: data[i][colIndices['Order_Date']],
+          time: orderTime,
+          index: data[i][colIndices['Order_Index']],
+          codeNum: data[i][colIndices['Order_CodeNum']],
+          name: data[i][colIndices['Order_Name']],
+          description: data[i][colIndices['Order_Description']],
+          costB2B: data[i][colIndices['Order_CostB2B']],
+          costB2C: data[i][colIndices['Order_CostB2C']],
+          isB2B: data[i][colIndices['Order_IsB2B']],
+          cnt: data[i][colIndices['Order_Cnt']],
+          payType: data[i][colIndices['PayType']] || '-',
+          totalCost: data[i][colIndices['Order_TotalCost']],
+          isCanceled: isCanceled
+        };
+        
+        // Group by serial number
+        if (!ordersMap[serialNumber]) {
+          ordersMap[serialNumber] = [];
+        }
+        ordersMap[serialNumber].push(order);
+      }
+    }
+
+    // Convert map to array of order groups
+    const orderGroups = [];
+    for (const serialNumber in ordersMap) {
+      const orders = ordersMap[serialNumber];
+      if (orders.length > 0) {
+        orderGroups.push({
+          date: orders[0].date.toString(),
+          index: orders[0].index,
+          orders: orders
+        });
+      }
+    }
+
+    // Sort by date and index
+    orderGroups.sort((a, b) => {
+      if (a.date !== b.date) {
+        return parseInt(a.date) - parseInt(b.date);
+      }
+      return a.index - b.index;
+    });
+
+    Logger.log(`Found ${orderGroups.length} orders in date range ${startDate}-${endDate}`);
+
+    return {
+      success: true,
+      orderGroups: orderGroups
+    };
+  } catch (error) {
+    Logger.log('Error getting orders by date range: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred: ' + error.toString()
+    };
+  }
+}

@@ -4,10 +4,46 @@
     <div class="header">
       <h1><span class="logo">📦</span> 재고 관리</h1>
     </div>
-    
+
+    <!-- ✅ NEW: Inventory Status Dashboard -->
+    <div class="inventory-status-section">
+      <h3 style="font-size: clamp(20px, 3vw, 24px); color: #2c3e50; margin-bottom: 15px; font-weight: 600;">
+        재고 현황
+      </h3>
+      <div class="inventory-status-grid">
+        <div class="inventory-status-item status-out">
+          <div class="inventory-status-icon">🔴</div>
+          <div class="inventory-status-content">
+            <div class="inventory-status-label">품절</div>
+            <div class="inventory-status-value" id="inventoryOutCount">-</div>
+          </div>
+        </div>
+        
+        <div class="inventory-status-item status-low">
+          <div class="inventory-status-icon">🟠</div>
+          <div class="inventory-status-content">
+            <div class="inventory-status-label">품절 임박</div>
+            <div class="inventory-status-value" id="inventoryLowCount">-</div>
+          </div>
+        </div>
+        
+        <div class="inventory-status-item status-normal">
+          <div class="inventory-status-icon">🟢</div>
+          <div class="inventory-status-content">
+            <div class="inventory-status-label">정상</div>
+            <div class="inventory-status-value" id="inventoryNormalCount">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ✅ Changed: 하나의 버튼으로 통합 -->
     <button class="btn btn-primary btn-action-large" onclick="showInventoryList()">
-      📋 재고 조회
+      재고 조회
+    </button>
+
+    <button class="btn btn-primary btn-action-large">
+      품절 및 임박 재고 조회 (구현 예정)
     </button>
   </div>
 </div>

@@ -6,9 +6,9 @@
   let orderItems = [];
   let currentOrderType = 'b2c';
   let isNavigating = false; // Browser history navigation support
-  // ===== Inventory List Variables =====
   let allInventoryItems = [];  // 전체 1500개 저장
   let inventorySearchText = '';
+  let isSubmitting = false;  // ✅ ADD: Prevent double submission
 
   // Handle browser back button
   window.addEventListener('popstate', function(event) {
@@ -157,7 +157,40 @@
     s.style.display = 'block';
     s.classList.add('active');
     stopOrderQRCamera();
+
+    // ✅ Reset status counts
+    document.getElementById('inventoryOutCount').textContent = '-';
+    document.getElementById('inventoryLowCount').textContent = '-';
+    document.getElementById('inventoryNormalCount').textContent = '-';
+    
+    // ✅ Load inventory status
+    loadInventoryStatus();
+
     navigateToScreen('inventoryMenuScreen');
+  }
+
+  // ===== NEW FUNCTION: Load inventory status for menu screen =====
+  function loadInventoryStatus() {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          updateInventoryStatusCounts(result.items);
+        } else {
+          console.error('Failed to load inventory status:', result.message);
+          // Show error counts
+          document.getElementById('inventoryOutCount').textContent = '?';
+          document.getElementById('inventoryLowCount').textContent = '?';
+          document.getElementById('inventoryNormalCount').textContent = '?';
+        }
+      })
+      .withFailureHandler(function(error) {
+        console.error('Error loading inventory status:', error);
+        // Show error counts
+        document.getElementById('inventoryOutCount').textContent = '?';
+        document.getElementById('inventoryLowCount').textContent = '?';
+        document.getElementById('inventoryNormalCount').textContent = '?';
+      })
+      .getAllItems();
   }
 
   function showOrderMenu() {
@@ -193,6 +226,9 @@
     document.getElementById('searchOrderMonth').value = month;
     document.getElementById('searchOrderDay').value = day;
     
+    // ✅ NEW: Update tab info
+    updateTabInfo();
+
     // 오늘 생성된 주문서 수 조회
     const orderDate = year.toString() + month.toString().padStart(2, '0') + day.toString().padStart(2, '0');
     orderDebugLog('주문 날짜 문자열: ' + orderDate);
@@ -287,62 +323,6 @@
     if (event.key === 'Enter' || event.keyCode === 13) {
       event.preventDefault();
       searchItemForOrder();
-    }
-  }
-
-  function searchOrder() {
-    const year = document.getElementById('searchOrderYear').value;
-    const month = String(document.getElementById('searchOrderMonth').value).padStart(2, '0');  // ✅ String() 추가
-    const day = String(document.getElementById('searchOrderDay').value).padStart(2, '0');  // ✅ String() 추가
-    const orderIndexInput = document.getElementById('searchOrderIndex').value.trim();
-    
-    if (!year || !month || !day) {
-      alert('날짜를 입력해주세요.');
-      return;
-    }
-    
-    const orderDate = year + month + day;
-    
-    // 주문서 번호가 비어있으면 전체 조회
-    if (!orderIndexInput || orderIndexInput === '') {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) {
-            hideAllScreens();
-            const s = document.getElementById('orderViewScreen');
-            s.style.display = 'block';
-            s.classList.add('active');
-            displayOrderList(orderDate, result.orderList);
-            navigateToScreen('orderViewScreen');
-          } else {
-            alert(result.message);
-          }
-        })
-        .withFailureHandler(function(error) {
-          alert('주문서 목록 조회 중 오류: ' + error);
-        })
-        .getOrderListByDate(orderDate);
-    } else {
-      // 개별 조회
-      const orderIndex = parseInt(orderIndexInput);
-      
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) {
-            hideAllScreens();
-            const s = document.getElementById('orderViewScreen');
-            s.style.display = 'block';
-            s.classList.add('active');
-            displayOrderView(result.orders);
-            navigateToScreen('orderViewScreen');
-          } else {
-            alert(result.message);
-          }
-        })
-        .withFailureHandler(function(error) {
-          alert('주문서 조회 중 오류: ' + error);
-        })
-        .getOrderData(orderDate, orderIndex);
     }
   }
 
@@ -986,6 +966,12 @@
   }
 
   function submitOrder() {
+    // ✅ Prevent double submission
+    if (isSubmitting) {
+      console.log('Already submitting order...');
+      return;
+    }
+
     if (orderItems.length === 0) {
       showOrderMessage('주문할 품목을 추가해주세요.', 'error');
       return;
@@ -1016,6 +1002,9 @@
     // 원래 내용 저장
     const originalContent = submitBtn.innerHTML;
     
+    // ✅ Set submitting flag
+    isSubmitting = true;
+
     // 버튼 비활성화
     submitBtn.disabled = true;
     submitBtn.style.opacity = '0.6';
@@ -1026,6 +1015,9 @@
     
     google.script.run
       .withSuccessHandler(function(result) {
+        // ✅ Reset submitting flag// ✅ Reset submitting flag
+        isSubmitting = false;
+
         if (result.success) {
           submitBtn.textContent = '✅ 주문 완료!';
           submitBtn.style.opacity = '1';
@@ -1054,6 +1046,9 @@
         }
       })
       .withFailureHandler(function(error) {
+        // ✅ Reset submitting flag
+        isSubmitting = false;
+
         submitBtn.disabled = false;
         submitBtn.style.opacity = '1';
         submitBtn.style.cursor = 'pointer';
@@ -1299,7 +1294,6 @@
           
           // ✅ Changed: 전체 다 표시
           renderInventoryItems(allInventoryItems);
-          
           // 카운트 업데이트
           updateInventorySearchInfo(allInventoryItems.length, allInventoryItems.length);
         } else {
@@ -1308,6 +1302,30 @@
       })
       .withFailureHandler(e => showError('itemList', '목록 로드 오류: ' + e))
       .getAllItems();
+  }
+
+  // ===== NEW FUNCTION: Update inventory status counts =====
+  function updateInventoryStatusCounts(items) {
+    let outCount = 0;      // 품절 (IsShortage === 0)
+    let lowCount = 0;      // 품절 임박 (IsShortage === 1)
+    let normalCount = 0;   // 정상 (IsShortage === 2 or empty)
+    
+    items.forEach(function(item) {
+      const isShortage = item.isShortage;
+      
+      if (isShortage === 0) {
+        outCount++;
+      } else if (isShortage === 1) {
+        lowCount++;
+      } else {
+        normalCount++;
+      }
+    });
+    
+    // Update UI
+    document.getElementById('inventoryOutCount').textContent = outCount + '개';
+    document.getElementById('inventoryLowCount').textContent = lowCount + '개';
+    document.getElementById('inventoryNormalCount').textContent = normalCount + '개';
   }
 
   function displayAllItems(r) {
@@ -1882,6 +1900,431 @@
       }
     } catch (e) {
       alert('QR 코드 디코딩 중 오류가 발생했습니다.');
+    }
+  }
+
+  // ===== NEW: Order Tab Functions =====
+  function switchOrderTab(tabName) {
+    // Remove active class from all tabs and contents
+    document.querySelectorAll('.order-tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    document.querySelectorAll('.order-tab-content').forEach(content => {
+      content.classList.remove('active');
+    });
+    
+    // Add active class to selected tab and content
+    document.querySelector(`.order-tab[data-tab="${tabName}"]`).classList.add('active');
+    document.getElementById(`orderTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+    
+    // Update tab info based on selection
+    updateTabInfo();
+  }
+
+  function updateTabInfo() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+    
+    // Today tab
+    document.getElementById('todayTabDate').textContent = `${year}년 ${month}월 ${day}일`;
+    
+    // Week tab - get Monday of this week
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    
+    const mondayYear = monday.getFullYear();
+    const mondayMonth = monday.getMonth() + 1;
+    const mondayDay = monday.getDate();
+    
+    document.getElementById('weekTabDate').textContent = 
+      `${mondayYear}년 ${mondayMonth}월 ${mondayDay}일 ~ ${year}년 ${month}월 ${day}일`;
+    
+    // Month tab
+    document.getElementById('monthTabDate').textContent = `${year}년 ${month}월 1일 ~ ${year}년 ${month}월 ${day}일`;
+  }
+
+  function searchOrderToday() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const orderDate = year + month + day;
+    
+    // ✅ Add loading message
+    showLoadingMessage('오늘 주문서를 조회하는 중...');
+
+    // Search all orders for today
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingMessage();  // ✅ Hide loading
+
+        if (result.success) {
+          hideAllScreens();
+          const s = document.getElementById('orderViewScreen');
+          s.style.display = 'block';
+          s.classList.add('active');
+          displayOrderList(orderDate, result.orderList);
+          navigateToScreen('orderViewScreen');
+        } else {
+          alert(result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoadingMessage();  // ✅ Hide loading on error
+        alert('주문서 조회 중 오류: ' + error);
+      })
+      .getOrderListByDate(orderDate);
+  }
+
+  function searchOrderWeek() {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    
+    const startDate = monday.getFullYear() + 
+                    String(monday.getMonth() + 1).padStart(2, '0') + 
+                    String(monday.getDate()).padStart(2, '0');
+  
+    const endDate = today.getFullYear() + 
+                    String(today.getMonth() + 1).padStart(2, '0') + 
+                    String(today.getDate()).padStart(2, '0');
+    
+    showLoadingMessage('이번주 주문서를 조회하는 중...');
+
+    // ✅ Single request for entire week
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingMessage();
+        
+        if (result.success) {
+          if (result.orderGroups.length === 0) {
+            alert('이번주 주문서가 없습니다.');
+            return;
+          }
+          
+          hideAllScreens();
+          const s = document.getElementById('orderViewScreen');
+          s.style.display = 'block';
+          s.classList.add('active');
+          displayMultipleDateOrders(result.orderGroups, '이번주');
+          navigateToScreen('orderViewScreen');
+        } else {
+          alert(result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoadingMessage();
+        alert('주문서 조회 중 오류: ' + error);
+      })
+      .getOrdersByDateRange(startDate, endDate);
+  }
+
+  function searchOrderMonth() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+    
+    const startDate = year + String(month).padStart(2, '0') + '01';
+    const endDate = year + String(month).padStart(2, '0') + String(day).padStart(2, '0');
+  
+    showLoadingMessage('이번달 주문서를 조회하는 중...');
+  
+    // ✅ Single request for entire month
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingMessage();
+        
+        if (result.success) {
+          if (result.orderGroups.length === 0) {
+            alert('이번달 주문서가 없습니다.');
+            return;
+          }
+          
+          hideAllScreens();
+          const s = document.getElementById('orderViewScreen');
+          s.style.display = 'block';
+          s.classList.add('active');
+          displayMultipleDateOrders(result.orderGroups, '이번달');
+          navigateToScreen('orderViewScreen');
+        } else {
+          alert(result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoadingMessage();
+        alert('주문서 조회 중 오류: ' + error);
+      })
+      .getOrdersByDateRange(startDate, endDate);
+  }
+
+  function searchOrderCustom() {
+    const year = document.getElementById('searchOrderYear').value;
+    const month = String(document.getElementById('searchOrderMonth').value).padStart(2, '0');
+    const day = String(document.getElementById('searchOrderDay').value).padStart(2, '0');
+    const orderIndexInput = document.getElementById('searchOrderIndex').value.trim();
+    
+    if (!year || !month || !day) {
+      alert('날짜를 입력해주세요.');
+      return;
+    }
+    
+    const orderDate = year + month + day;
+    
+    // 주문서 번호가 비어있으면 전체 조회
+    if (!orderIndexInput || orderIndexInput === '') {
+      // ✅ Add loading message for list query
+      showLoadingMessage('주문서를 조회하는 중...');
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoadingMessage();  // ✅ Hide loading
+          if (result.success) {
+            hideAllScreens();
+            const s = document.getElementById('orderViewScreen');
+            s.style.display = 'block';
+            s.classList.add('active');
+            displayOrderList(orderDate, result.orderList);
+            navigateToScreen('orderViewScreen');
+          } else {
+            alert(result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoadingMessage();  // ✅ Hide loading on error
+          alert('주문서 목록 조회 중 오류: ' + error);
+        })
+        .getOrderListByDate(orderDate);
+    } else {
+      // 개별 조회
+      const orderIndex = parseInt(orderIndexInput);
+      
+      // ✅ Add loading message for single query
+      showLoadingMessage('주문서 상세 정보를 불러오는 중...');
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoadingMessage();  // ✅ Hide loading
+          if (result.success) {
+            hideAllScreens();
+            const s = document.getElementById('orderViewScreen');
+            s.style.display = 'block';
+            s.classList.add('active');
+            displayOrderView(result.orders);
+            navigateToScreen('orderViewScreen');
+          } else {
+            alert(result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoadingMessage();  // ✅ Hide loading on error
+          alert('주문서 조회 중 오류: ' + error);
+        })
+        .getOrderData(orderDate, orderIndex);
+    }
+  }
+
+  function displayMultipleDateOrders(orderDetailsList, periodName) {
+    let totalAmount = 0;
+    let totalItems = 0;
+    let totalQty = 0;
+    
+    // Calculate totals
+    orderDetailsList.forEach(function(orderGroup) {
+      orderGroup.orders.forEach(function(order) {
+        totalAmount += order.totalCost || 0;
+        totalQty += order.cnt || 0;
+      });
+      totalItems += orderGroup.orders.length;
+    });
+    
+    // Header
+    let html = '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #e8ecef; border-left: 5px solid #3498db;">';
+    html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">';
+    html += '<span style="font-size: 42px;">📋</span>';
+    html += '<div>';
+    html += '<h2 style="font-size: 38px; color: #2c3e50; margin: 0; font-weight: 700;">' + periodName + ' 주문서 목록</h2>';
+    html += '<div style="color: #7f8c8d; font-size: 18px; margin-top: 8px;">총 <strong style="color: #3498db;">' + orderDetailsList.length + '</strong>개 주문서</div>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+    
+    // Display each order
+    orderDetailsList.forEach(function(orderGroup) {
+      const orderSerialNumber = orderGroup.orders[0].serialNumber;
+      const orderTime = orderGroup.orders[0].time || '-';
+      const payType = orderGroup.orders[0].payType || '-';
+      const isCanceled = orderGroup.orders[0].isCanceled === true;
+      
+      const dateStr = orderGroup.date.toString();
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      const formattedDate = `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`;
+      
+      let orderAmount = 0;
+      let orderQty = 0;
+      
+      orderGroup.orders.forEach(function(order) {
+        orderAmount += order.totalCost || 0;
+        orderQty += order.cnt || 0;
+      });
+
+      const cardBorder = isCanceled ? 'border: 2px solid #fee2e2; border-left: 5px solid #dc2626;' : 'border: 2px solid #e8ecef; border-left: 5px solid #3498db;';
+      const titleColor = isCanceled ? '#dc2626' : '#2c3e50';
+      const accentColor = isCanceled ? '#dc2626' : '#3498db';
+
+      html += '<div style="background: white; ' + cardBorder + ' padding: 25px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);">';
+      
+      // Header with cancel badge or button
+      html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">';
+      html += '<div>';
+      html += '<h3 style="font-size: 28px; color: ' + titleColor + '; margin: 0 0 8px 0; font-weight: 700;">';
+      html += formattedDate + ' - 주문서 #' + orderGroup.index;
+      html += '</h3>';
+      html += '<div style="font-family: monospace; color: #7f8c8d; font-size: 16px;">' + orderSerialNumber + '</div>';
+      html += '</div>';
+      
+      if (isCanceled) {
+        html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
+      } else {
+        html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrderFromList(\'' + orderSerialNumber + '\', \'' + orderGroup.date + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
+      }
+      html += '</div>';
+      
+      // Simple text info
+      html += '<div style="color: #7f8c8d; font-size: 18px; line-height: 1.8; margin-bottom: 20px;">';
+      html += '주문 시간: <strong style="color: #2c3e50;">' + orderTime + '</strong><br>';
+      html += '결제 방법: <strong style="color: #2c3e50;">' + payType + '</strong><br>';
+      html += '주문 금액: <strong style="color: ' + accentColor + ';">' + orderAmount.toLocaleString() + '원</strong>';
+      html += '</div>';
+      
+      html += '<div style="overflow-x: auto;">';
+      html += '<table class="order-table">';
+      html += '<thead>';
+      html += '<tr style="border-bottom: none;">';
+      html += '<th rowspan="2" style="vertical-align: middle; width: 15%;">코드번호</th>';
+      html += '<th style="padding-bottom: 8px; width: 35%;">품명</th>';
+      html += '<th style="padding-bottom: 8px; width: 20%;">타입</th>';
+      html += '<th style="padding-bottom: 8px; width: 15%;">개수</th>';
+      html += '</tr>';
+      html += '<tr>';
+      html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>';
+      html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">가격</th>';
+      html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">총가격</th>';
+      html += '</tr>';
+      html += '</thead>';
+      html += '<tbody>';
+      
+      orderGroup.orders.forEach(function(order) {
+        const cost = order.isB2B === 1 ? order.costB2B : order.costB2C;
+        const textStyle = isCanceled ? 'text-decoration: line-through; opacity: 0.5;' : '';
+      
+        // First row
+        html += '<tr style="border-bottom: none;">';
+        html += '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 18px; ' + textStyle + '">';
+        html += order.codeNum;
+        html += '</td>';
+        html += '<td style="font-size: 18px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px; ' + textStyle + '">';
+        html += order.name;
+        html += '</td>';
+        html += '<td style="padding: 15px 10px 5px 10px; text-align: center; ' + textStyle + '">';
+        html += order.isB2B === 1 ? '도' : '소';
+        html += '</td>';
+        html += '<td style="vertical-align: middle; font-size: 18px; text-align: center; padding: 15px 10px 5px 10px; ' + textStyle + '">';
+        html += order.cnt;
+        html += '</td>';
+        html += '</tr>';
+        
+        // Second row
+        html += '<tr style="border-bottom: 2px solid #ddd;">';
+        html += '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 16px; color: #666; ' + textStyle + '">';
+        html += order.description || '-';
+        html += '</td>';
+        html += '<td style="padding: 5px 15px 15px 15px; text-align: center; ' + textStyle + '">';
+        html += '<strong style="color: ' + accentColor + '; font-size: 18px;">' + cost.toLocaleString() + '원</strong>';
+        html += '</td>';
+        html += '<td style="padding: 5px 15px 15px 15px; text-align: center; ' + textStyle + '">';
+        html += '<strong style="color: ' + accentColor + '; font-size: 18px;">' + order.totalCost.toLocaleString() + '원</strong>';
+        html += '</td>';
+        html += '</tr>';
+      });
+      
+      html += '</tbody>';
+      html += '</table>';
+      html += '</div>';
+      html += '</div>';
+    });
+    
+    // Summary card
+    html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #e3f2fd; border-left: 5px solid #3498db;">';
+    html += '<h3 style="font-size: 24px; color: #2c3e50; margin-bottom: 20px; font-weight: 600;">📊 ' + periodName + ' 전체 합계</h3>';
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 주문 금액</div>';
+    html += '<div style="color: #3498db; font-size: 32px; font-weight: 700;">' + totalAmount.toLocaleString() + '원</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 품목 수</div>';
+    html += '<div style="color: #2c3e50; font-size: 32px; font-weight: 700;">' + totalItems + '개</div>';
+    html += '</div>';
+    
+    html += '<div style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">';
+    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 8px;">총 수량</div>';
+    html += '<div style="color: #2c3e50; font-size: 32px; font-weight: 700;">' + totalQty + '개</div>';
+    html += '</div>';
+    
+    html += '</div>';
+    html += '</div>';
+    
+    document.getElementById('orderViewContent').innerHTML = html;
+  }
+
+  function showLoadingMessage(message) {
+    let overlay = document.getElementById('loadingOverlay');
+    
+    if (overlay) {
+      // ✅ Update existing message
+      const textElement = overlay.querySelector('.loading-text');
+      if (textElement) {
+        textElement.textContent = message;
+      }
+      return;
+    }
+    
+    // Create new overlay
+    overlay = document.createElement('div');
+    overlay.id = 'loadingOverlay';
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+    
+    const box = document.createElement('div');
+    box.style.cssText = 'background: white; padding: 30px 40px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); text-align: center;';
+    
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+    spinner.style.margin = '0 auto 20px auto';
+    
+    const text = document.createElement('div');
+    text.className = 'loading-text';  // ✅ Add class for updates
+    text.style.cssText = 'font-size: 18px; color: #2c3e50; font-weight: 600;';
+    text.textContent = message;
+    
+    box.appendChild(spinner);
+    box.appendChild(text);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  }
+
+  function hideLoadingMessage() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+      overlay.remove();
     }
   }
 

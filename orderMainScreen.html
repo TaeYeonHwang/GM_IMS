@@ -9,37 +9,105 @@
       </div>
     </div>
 
-    <!-- 조회 영역 -->
-    <div class="order-search-section">
-      <div class="order-header">
-        <div class="input-group" style="margin: 0;">
-          <label class="order-search-label">년도</label>
-          <input type="number" id="searchOrderYear" class="order-search-input">
-        </div>
-        <div class="input-group" style="margin: 0;">
-          <label class="order-search-label">월</label>
-          <input type="number" id="searchOrderMonth" min="1" max="12" class="order-search-input">
-        </div>
-        <div class="input-group" style="margin: 0;">
-          <label class="order-search-label">일</label>
-          <input type="number" id="searchOrderDay" min="1" max="31" class="order-search-input">
-        </div>
-        <div class="input-group" style="margin: 0;">
-          <label class="order-search-label">주문서 번호</label>
-          <input type="number" id="searchOrderIndex" min="0" max="9999" placeholder="전체 조회는 비워두세요" class="order-search-input">
-        </div>
-      </div>
-      <button class="btn btn-secondary btn-action-large" onclick="searchOrder()" style="width: 100%;"> 
-        조회하기
-      </button>
-
-      <!-- 신규 생성 버튼 -->
+    <!-- ✅ MOVED: 신규 생성 버튼을 맨 위로 -->
+    <div class="order-create-section" style="margin-bottom: 25px; padding-bottom: 0; border-bottom: none;">
       <button class="btn btn-primary btn-action-large" onclick="showNewOrderForm()" style="width: 100%;"> 
         주문서 신규 생성
       </button>
     </div>
 
-    <!-- 디버그 창 추가 -->
+    <!-- 구분선 -->
+    <div style="border-top: 2px solid #e8ecef; margin: 25px 0; padding-top: 10px;">
+      <h3 style="font-size: clamp(20px, 3vw, 26px); color: #2c3e50; margin-bottom: 15px; font-weight: 600; text-align: center;">
+        주문서 조회
+      </h3>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="order-tab-section">
+      <div class="order-tabs">
+        <button class="order-tab active" data-tab="today" onclick="switchOrderTab('today')">
+          오늘
+        </button>
+        <button class="order-tab" data-tab="week" onclick="switchOrderTab('week')">
+          이번주
+        </button>
+        <button class="order-tab" data-tab="month" onclick="switchOrderTab('month')">
+          이번달
+        </button>
+        <button class="order-tab" data-tab="custom" onclick="switchOrderTab('custom')">
+          직접입력
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content: Today (default active) -->
+    <div id="orderTabToday" class="order-tab-content active">
+      <div class="order-search-section">
+        <div class="order-tab-info">
+          <span class="order-tab-icon">📅</span>
+          <span id="todayTabDate">-</span>
+        </div>
+        <button class="btn btn-secondary btn-action-large" onclick="searchOrderToday()" style="width: 100%;"> 
+          오늘 주문 조회하기
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content: Week -->
+    <div id="orderTabWeek" class="order-tab-content">
+      <div class="order-search-section">
+        <div class="order-tab-info">
+          <span class="order-tab-icon">📅</span>
+          <span id="weekTabDate">-</span>
+        </div>
+        <button class="btn btn-secondary btn-action-large" onclick="searchOrderWeek()" style="width: 100%;"> 
+          이번주 주문 조회하기
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content: Month -->
+    <div id="orderTabMonth" class="order-tab-content">
+      <div class="order-search-section">
+        <div class="order-tab-info">
+          <span class="order-tab-icon">📅</span>
+          <span id="monthTabDate">-</span>
+        </div>
+        <button class="btn btn-secondary btn-action-large" onclick="searchOrderMonth()" style="width: 100%;"> 
+          이번달 주문 조회하기
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content: Custom (기존 직접입력) -->
+    <div id="orderTabCustom" class="order-tab-content">
+      <div class="order-search-section">
+        <div class="order-header">
+          <div class="input-group" style="margin: 0;">
+            <label class="order-search-label">년도</label>
+            <input type="number" id="searchOrderYear" class="order-search-input">
+          </div>
+          <div class="input-group" style="margin: 0;">
+            <label class="order-search-label">월</label>
+            <input type="number" id="searchOrderMonth" min="1" max="12" class="order-search-input">
+          </div>
+          <div class="input-group" style="margin: 0;">
+            <label class="order-search-label">일</label>
+            <input type="number" id="searchOrderDay" min="1" max="31" class="order-search-input">
+          </div>
+          <div class="input-group" style="margin: 0;">
+            <label class="order-search-label">주문서 번호</label>
+            <input type="number" id="searchOrderIndex" min="0" max="9999" placeholder="전체 조회는 비워두세요" class="order-search-input">
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-action-large" onclick="searchOrderCustom()" style="width: 100%;"> 
+          조회하기
+        </button>
+      </div>
+    </div>
+
+    <!-- 디버그 창 -->
     <div id="orderDebugBox" class="debug-box" style="display:none;">
       <strong>🔍 디버그 로그:</strong>
       <div id="orderDebugLogs"></div>
