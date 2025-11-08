@@ -1317,3 +1317,203 @@ function getOrdersByDateRange(startDate, endDate) {
     };
   }
 }
+
+
+function getInventoryStatusCountsFromSheet() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let dashboardSheet = ss.getSheetByName('Dashboard');
+
+    if (!dashboardSheet) {
+      return {
+        success: false,
+        message: 'Dashboard sheet not found.'
+      };
+    }
+
+    // 값 읽기 (B2(품절 개수), B3(품절임박 개수), B4(정상 개수))
+    const outCount = dashboardSheet.getRange('B2').getValue() || 0;
+    const lowCount = dashboardSheet.getRange('B3').getValue() || 0;
+    const normalCount = dashboardSheet.getRange('B4').getValue() || 0;
+
+    Logger.log(`Inventory counts from sheet - Out: ${outCount}, Low: ${lowCount}, Normal: ${normalCount}`);
+
+    return {
+      success: true,
+      outCount: outCount,
+      lowCount: lowCount,
+      normalCount: normalCount
+    };
+  } catch (error) {
+    Logger.log('Error getting inventory counts from sheet: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred: ' + error.toString()
+    };
+  }
+}
+
+// Generate receipt PDF(s) from order data
+function generateReceiptPDF(orderSerialNumber) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const templateSheet = ss.getSheetByName('ReceiptTemplate');
+    
+    if (!templateSheet) {
+      return { success: false, message: 'ReceiptTemplate sheet not found.' };
+    }
+    
+    // Get order data
+    const orderSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    if (!orderSheet) {
+      return { success: false, message: 'PurchaseOrder sheet not found.' };
+    }
+    
+    const data = orderSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Find order items
+    const orders = [];
+    for (let i = 1; i < data.length; i++) {
+      const rowSerialNumber = data[i][headers.indexOf('Order_SerialNumber')];
+      if (rowSerialNumber && rowSerialNumber.toString() === orderSerialNumber.toString()) {
+        orders.push({
+          date: data[i][headers.indexOf('Order_Date')],
+          name: data[i][headers.indexOf('Order_Name')],
+          description: data[i][headers.indexOf('Order_Description')],
+          cnt: data[i][headers.indexOf('Order_Cnt')],
+          costB2B: data[i][headers.indexOf('Order_CostB2B')],
+          costB2C: data[i][headers.indexOf('Order_CostB2C')],
+          isB2B: data[i][headers.indexOf('Order_IsB2B')],
+          totalCost: data[i][headers.indexOf('Order_TotalCost')]
+        });
+      }
+    }
+    
+    if (orders.length === 0) {
+      return { success: false, message: 'No orders found for this serial number.' };
+    }
+    
+    // Split into pages (14 items per page)
+    const itemsPerPage = 14;
+    const pages = [];
+    for (let i = 0; i < orders.length; i += itemsPerPage) {
+      pages.push(orders.slice(i, i + itemsPerPage));
+    }
+    
+    const pdfFiles = [];
+    const folderId = '14Fp2i5BUj36vKFolDFdgbYC_B2pZDVh_'; // Your folder ID
+    const folder = DriveApp.getFolderById(folderId);
+    
+    // Generate PDF for each page
+    for (let pageNum = 0; pageNum < pages.length; pageNum++) {
+      const pageItems = pages[pageNum];
+      
+      // Create temp sheet
+      const tempSheet = templateSheet.copyTo(ss);
+      const tempSheetId = tempSheet.getSheetId();
+      tempSheet.setName('Temp_' + Date.now() + '_' + pageNum);
+      
+      // Format date YYYY.MM.DD
+      const dateStr = orders[0].date.toString();
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      const formattedDateFull = `${year}.${month}.${day}`;
+      const formattedDateShort = `${month}.${day}`;
+      
+      // Fill header
+      tempSheet.getRange('B11').setValue(formattedDateFull);
+      
+      // Calculate total for this page
+      let pageTotal = 0;
+      pageItems.forEach(item => {
+        pageTotal += item.totalCost;
+      });
+      tempSheet.getRange('F11').setValue(pageTotal);
+      
+      // Fill items (rows 14-27)
+      let row = 14;
+      pageItems.forEach(item => {
+        // Date (B column)
+        tempSheet.getRange(row, 2).setValue(formattedDateShort); // B14-B27
+        
+        // Item name + description (D column)
+        const itemText = item.description 
+          ? `${item.name} (${item.description})` 
+          : item.name;
+        tempSheet.getRange(row, 4).setValue(itemText); // D14-D27
+        
+        // Quantity (G column)
+        tempSheet.getRange(row, 7).setValue(item.cnt); // G14-G27
+        
+        // Unit price (I column)
+        const unitPrice = item.isB2B === 1 ? item.costB2B : item.costB2C;
+        tempSheet.getRange(row, 9).setValue(unitPrice); // I14-I27
+        
+        // Total price (K column)
+        tempSheet.getRange(row, 11).setValue(item.totalCost); // K14-K27
+        
+        row++;
+      });
+      
+      // Total at bottom (K28)
+      tempSheet.getRange('K28').setValue(pageTotal);
+      
+      SpreadsheetApp.flush();
+      
+      // Export to PDF
+      const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=pdf&gid=${tempSheetId}&portrait=false&fitw=true&range=A1:Y30&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED&attachment=false&top_margin=0.2&bottom_margin=0.2&left_margin=0.2&right_margin=0.2`;
+      // portrait : false(가로모드), true(세로모드)
+      // fitw : true(폭맞춤), false(실제크기)
+      // range : 출력할 범위 지정
+      // gridlines : false(격자선없음), true(격자선있음)
+      // printtitle : false(제목없음), true(제목있음)
+      // sheetnames : false(시트이름없음), true(시트이름있음)
+      // pagenum : UNDEFINED(없음), CENTER(가운데), RIGHT(오른쪽)
+      // attachment : false(브라우저내부표시), true(다운로드)
+      // margins : 단위 inch
+
+      const token = ScriptApp.getOAuthToken();
+      const response = UrlFetchApp.fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      
+      // File name
+      const pageSuffix = pages.length > 1 ? `_${pageNum + 1}` : '';
+      const fileName = `영수증_${orderSerialNumber}${pageSuffix}.pdf`;
+      const pdfBlob = response.getBlob().setName(fileName);
+      
+      // Save to Drive
+      const file = folder.createFile(pdfBlob);
+      pdfFiles.push({
+        name: fileName,
+        url: file.getUrl(),
+        id: file.getId()
+      });
+      
+      // Delete temp sheet
+      ss.deleteSheet(tempSheet);
+      
+      // Small delay between pages
+      if (pageNum < pages.length - 1) {
+        Utilities.sleep(500);
+      }
+    }
+    
+    Logger.log(`Generated ${pdfFiles.length} PDF(s) for order ${orderSerialNumber}`);
+    
+    return {
+      success: true,
+      files: pdfFiles,
+      count: pdfFiles.length
+    };
+    
+  } catch (error) {
+    Logger.log('Error generating receipt: ' + error.toString());
+    return {
+      success: false,
+      message: error.toString()
+    };
+  }
+}

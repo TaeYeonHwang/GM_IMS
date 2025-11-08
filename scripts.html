@@ -169,12 +169,15 @@
     navigateToScreen('inventoryMenuScreen');
   }
 
-  // ===== NEW FUNCTION: Load inventory status for menu screen =====
+  // ===== Load inventory status for menu screen =====
   function loadInventoryStatus() {
     google.script.run
       .withSuccessHandler(function(result) {
         if (result.success) {
-          updateInventoryStatusCounts(result.items);
+          // ✅ Just display the values from sheet
+          document.getElementById('inventoryOutCount').textContent = result.outCount + '개';
+          document.getElementById('inventoryLowCount').textContent = result.lowCount + '개';
+          document.getElementById('inventoryNormalCount').textContent = result.normalCount + '개';
         } else {
           console.error('Failed to load inventory status:', result.message);
           // Show error counts
@@ -190,7 +193,7 @@
         document.getElementById('inventoryLowCount').textContent = '?';
         document.getElementById('inventoryNormalCount').textContent = '?';
       })
-      .getAllItems();
+      .getInventoryStatusCountsFromSheet();
   }
 
   function showOrderMenu() {
@@ -613,6 +616,7 @@
       if (isCanceled) {
         html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
       } else {
+        html += '<button class="btn btn-secondary btn-small" onclick="generateReceiptFromList(\'' + orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content; background: white; color: #667eea; font-weight: 600;">📄 영수증</button>';
         html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrderFromList(\'' + orderSerialNumber + '\', \'' + orderDate + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
       }
       html += '</div>';
@@ -2189,11 +2193,15 @@
       html += '<div style="font-family: monospace; color: #7f8c8d; font-size: 16px;">' + orderSerialNumber + '</div>';
       html += '</div>';
       
+      // ✅ 영수증 버튼 추가
+      html += '<div style="display: flex; gap: 8px;">';
       if (isCanceled) {
         html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
       } else {
+        html += '<button class="btn btn-secondary btn-small" onclick="generateReceiptFromList(\'' + orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content; background: #f0f0f0; color: #667eea; font-weight: 600;">📄 영수증</button>';
         html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrderFromList(\'' + orderSerialNumber + '\', \'' + orderGroup.date + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
       }
+      html += '</div>';
       html += '</div>';
       
       // Simple text info
@@ -2328,5 +2336,63 @@
     }
   }
 
+  // Generate receipt from order view screen
+  function generateReceiptFromView(orderSerialNumber) {
+    showLoadingMessage('영수증을 생성하는 중...');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingMessage();
+        
+        if (result.success) {
+          let message = `영수증이 생성되었습니다!\n\n`;
+          message += `생성된 파일: ${result.count}개\n\n`;
+          
+          result.files.forEach((file, index) => {
+            message += `${index + 1}. ${file.name}\n`;
+          });
+          
+          alert(message);
+          
+          // Open first PDF
+          if (result.files.length > 0) {
+            window.open(result.files[0].url, '_blank');
+          }
+        } else {
+          alert('영수증 생성 실패: ' + result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoadingMessage();
+        alert('영수증 생성 중 오류: ' + error);
+      })
+      .generateReceiptPDF(orderSerialNumber);
+  }
+
+  // Generate receipt from order list screen
+  function generateReceiptFromList(orderSerialNumber) {
+    showLoadingMessage('영수증을 생성하는 중...');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingMessage();
+        
+        if (result.success) {
+          alert(`영수증 ${result.count}개가 생성되었습니다!`);
+          
+          // Open first PDF
+          if (result.files.length > 0) {
+            window.open(result.files[0].url, '_blank');
+          }
+        } else {
+          alert('영수증 생성 실패: ' + result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoadingMessage();
+        alert('영수증 생성 중 오류: ' + error);
+      })
+      .generateReceiptPDF(orderSerialNumber);
+  }
 
 </script>
