@@ -9,10 +9,17 @@
   let allInventoryItems = [];  // 전체 1500개 저장
   let inventorySearchText = '';
   let isSubmitting = false;  // ✅ ADD: Prevent double submission
+
+  // inventory status cache
   let inventoryStatusCache = null;
   let inventoryStatusCacheTime = null;
   let inventorySearchTimeout = null; // ✅ ADD: Timer value for Debouncing
   const INVENTORY_STATUS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  
+  // latest order cache
+  let latestOrderCache = null;
+  let latestOrderCacheTime = null;
+  const LATEST_ORDER_CACHE_DURATION = 5 * 60 * 1000; // 5분
 
   // Handle browser back button
   window.addEventListener('popstate', function(event) {
@@ -260,44 +267,25 @@
     // 오늘 생성된 주문서 수 조회
     const orderDate = year.toString() + month.toString().padStart(2, '0') + day.toString().padStart(2, '0');
     orderDebugLog('주문 날짜 문자열: ' + orderDate);
-    orderDebugLog('서버에 getNewOrderIndex 요청 중...');
+    orderDebugLog('서버에 오늘 주문 수 요청 중...');
 
     google.script.run
       .withSuccessHandler(function(result) {
         orderDebugLog('서버 응답 받음', 'success');
-        orderDebugLog('result.success: ' + result.success);
-        orderDebugLog('result.orderIndex: ' + result.orderIndex);
-        orderDebugLog('result.existingOrders: ' + result.existingOrders);
-
+    
         if (result.success) {
-          const existingCount = result.existingOrders || 0;
-          const nextIndex = result.orderIndex || 1;
-          orderDebugLog('기존 주문서 개수: ' + existingCount, 'success');
-          orderDebugLog('다음 주문서 번호: ' + nextIndex, 'success');
-
-          document.getElementById('todayOrderCount').textContent = existingCount;
-
-          // 마지막 주문서 번호를 조회 입력 필드에 기본값으로 (없으면 비워둠)
-          if (result.orderIndex > 1) {
-            const lastOrderIndex = nextIndex - 1;
-            orderDebugLog('마지막 주문서 번호: ' + lastOrderIndex);
-            document.getElementById('searchOrderIndex').value = result.orderIndex - 1;
-          } else {
-            orderDebugLog('생성된 주문서 없음');
-            document.getElementById('searchOrderIndex').value = '';
-          }
+          orderDebugLog('오늘 주문서 개수: ' + result.orderCount, 'success');
+          document.getElementById('todayOrderCount').textContent = result.orderCount;
         } else {
           orderDebugLog('서버 응답 실패: ' + result.message, 'error');
           document.getElementById('todayOrderCount').textContent = '0';
-          document.getElementById('searchOrderIndex').value = '';
         }
       })
       .withFailureHandler(function(error) {
         orderDebugLog('서버 요청 실패: ' + error, 'error');
         document.getElementById('todayOrderCount').textContent = '?';
-        console.error('오늘 주문서 수 조회 실패:', error);
       })
-      .getNewOrderIndex(orderDate);
+      .getTodayOrderCount();
 
       navigateToScreen('orderMainScreen');
   }
@@ -305,10 +293,26 @@
   // ===== Load Latest Order Card =====
   function loadLatestOrderCard() {
     const container = document.getElementById('latestOrderCard');
+
+    // ✅ Frontend 캐시 확인
+    const now = Date.now();
+    if (latestOrderCache && latestOrderCacheTime && 
+        (now - latestOrderCacheTime < LATEST_ORDER_CACHE_DURATION)) {
+      console.log('✓ Frontend cache HIT: latest_order');
+      displayLatestOrderCard(latestOrderCache);
+      return;
+    }
+    console.log('✗ Frontend cache MISS: latest_order');
     container.innerHTML = '<div class="loading"><div class="spinner"></div><div>직전 주문서 로딩 중...</div></div>';
     
+    console.log('📋 직전 주문서 요청 시작');  // ✅ 추가
+
     google.script.run
       .withSuccessHandler(function(result) {
+        // ✅ Frontend 캐시 저장
+        latestOrderCache = result;
+        latestOrderCacheTime = Date.now();
+
         if (result.success && result.hasOrder) {
           displayLatestOrderCard(result);
         } else if (result.success && !result.hasOrder) {
@@ -327,6 +331,9 @@
         }
       })
       .withFailureHandler(function(error) {
+
+        console.log('📋 직전 주문서 에러:', error);  // ✅ 추가
+
         container.innerHTML = `
           <div class="alert alert-error">
             직전 주문서 로드 중 오류: ${error}
@@ -339,77 +346,83 @@
   // ===== Display Latest Order Card =====
   function displayLatestOrderCard(data) {
     const container = document.getElementById('latestOrderCard');
-    
+  
     const isCanceled = data.isCanceled === true;
-    const badgeClass = isCanceled ? 'canceled' : '';
-    const badgeText = isCanceled ? '❌ 취소됨' : '✅ 최신';
+    const cardBorder = isCanceled ? 'border: 2px solid #fee2e2; border-left: 5px solid #dc2626;' : 'border: 2px solid #e8ecef; border-left: 5px solid #27ae60;';
+    const titleColor = isCanceled ? '#dc2626' : '#27ae60';
+    const accentColor = isCanceled ? '#dc2626' : '#27ae60';
     
-    let html = '<div class="latest-order-card">';
+    let html = '<div style="background: white; ' + cardBorder + ' padding: 25px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);">';
     
     // Header
-    html += '<div class="latest-order-card-header">';
-    html += '<div class="latest-order-title">';
-    html += `📋 직전 주문서 - #${data.orderIndex}`;
+    html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">';
+    html += '<div>';
+    html += '<div style="color: ' + accentColor + '; font-size: 16px; font-weight: 600; margin-bottom: 8px;">✨ 직전 최신 주문서</div>';
+    html += '<h3 style="font-size: 28px; color: ' + titleColor + '; margin: 0 0 8px 0; font-weight: 700;">';
+    html += data.orderSerialNumber;
+    html += '</h3>';
     html += '</div>';
-    html += `<div class="latest-order-badge ${badgeClass}">${badgeText}</div>`;
-    html += '</div>';
-    
-    // Info Grid
-    html += '<div class="latest-order-info-grid">';
-    
-    html += '<div class="latest-order-info-item">';
-    html += '<div class="latest-order-info-label">주문 시간</div>';
-    html += `<div class="latest-order-info-value">${data.orderTime}</div>`;
-    html += '</div>';
-    
-    html += '<div class="latest-order-info-item">';
-    html += '<div class="latest-order-info-label">결제 방법</div>';
-    html += `<div class="latest-order-info-value">${data.payType}</div>`;
-    html += '</div>';
-    
-    html += '<div class="latest-order-info-item">';
-    html += '<div class="latest-order-info-label">품목 수</div>';
-    html += `<div class="latest-order-info-value">${data.itemCount}개</div>`;
-    html += '</div>';
-    
-    html += '<div class="latest-order-info-item">';
-    html += '<div class="latest-order-info-label">총 금액</div>';
-    html += `<div class="latest-order-info-value" style="color: #27ae60;">${data.totalAmount.toLocaleString()}원</div>`;
-    html += '</div>';
-    
-    html += '</div>'; // End info-grid
-    
-    // Items Preview
-    if (data.items && data.items.length > 0) {
-      html += '<div class="latest-order-items">';
-      html += '<div class="latest-order-items-title">📦 주문 품목 미리보기</div>';
-      
-      data.items.forEach(item => {
-        html += `<div class="latest-order-item">• ${item.name} (${item.cnt}개)</div>`;
-      });
-      
-      if (data.itemCount > 3) {
-        html += `<div class="latest-order-item" style="color: #7f8c8d; font-style: italic;">... 외 ${data.itemCount - 3}개 품목</div>`;
-      }
-      
-      html += '</div>';
-    }
     
     // Buttons
-    html += '<div class="latest-order-buttons">';
-    html += `<button class="btn btn-secondary btn-small" onclick="viewLatestOrder('${data.orderSerialNumber}')">`;
-    html += '📄 자세히 보기';
-    html += '</button>';
-    
-    if (!isCanceled) {
-      html += `<button class="btn btn-secondary btn-small" onclick="generateReceiptFromLatest('${data.orderSerialNumber}')">`;
-      html += '🧾 영수증 생성';
-      html += '</button>';
+    html += '<div style="display: flex; gap: 8px;">';
+    if (isCanceled) {
+      html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
+    } else {
+      html += '<button class="btn btn-secondary btn-small" onclick="generateReceiptFromLatest(\'' + data.orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">📄 영수증</button>';
+      html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrderFromList(\'' + data.orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
     }
-    
+    html += '</div>';
     html += '</div>';
     
-    html += '</div>'; // End card
+    // Info
+    html += '<div style="color: #7f8c8d; font-size: 18px; line-height: 1.8; margin-bottom: 20px;">';
+    html += '주문 시간: <strong style="color: #2c3e50;">' + data.orderTime + '</strong><br>';
+    html += '주문 금액: <strong style="color: ' + accentColor + ';">' + data.totalAmount.toLocaleString() + '원</strong> (' + data.payType + ')';
+    html += '</div>';
+    
+    // ✅ 전체 품목 테이블 표시
+    html += '<div style="overflow-x: auto;">';
+    html += '<table class="order-table">';
+    html += '<thead>';
+    html += '<tr style="border-bottom: none;">';
+    html += '<th rowspan="2" style="vertical-align: middle; width: 15%;">코드번호</th>';
+    html += '<th style="padding-bottom: 8px; width: 35%;">품명</th>';
+    html += '<th style="padding-bottom: 8px; width: 20%;">타입</th>';
+    html += '<th style="padding-bottom: 8px; width: 15%;">개수</th>';
+    html += '</tr>';
+    html += '<tr>';
+    html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">설명</th>';
+    html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">가격</th>';
+    html += '<th style="padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.3);">총가격</th>';
+    html += '</tr>';
+    html += '</thead>';
+    html += '<tbody>';
+    
+    data.items.forEach(function(item) {
+      const cost = item.isB2B === 1 ? item.costB2B : item.costB2C;
+      const textStyle = isCanceled ? 'text-decoration: line-through; opacity: 0.5;' : '';
+      
+      // First row
+      html += '<tr style="border-bottom: none;">';
+      html += '<td rowspan="2" style="vertical-align: middle; font-weight: 600; font-size: 18px; ' + textStyle + '">' + item.codeNum + '</td>';
+      html += '<td style="font-size: 18px; font-weight: 600; text-align: left; padding: 15px 15px 5px 15px; ' + textStyle + '">' + item.name + '</td>';
+      html += '<td style="padding: 15px 10px 5px 10px; text-align: center; ' + textStyle + '">' + (item.isB2B === 1 ? '도' : '소') + '</td>';
+      html += '<td style="vertical-align: middle; font-size: 18px; text-align: center; padding: 15px 10px 5px 10px; ' + textStyle + '">' + item.cnt + '</td>';
+      html += '</tr>';
+      
+      // Second row
+      html += '<tr style="border-bottom: 2px solid #ddd;">';
+      html += '<td style="text-align: left; padding: 5px 15px 15px 15px; font-size: 16px; color: #666; ' + textStyle + '">' + (item.description || '-') + '</td>';
+      html += '<td style="padding: 5px 15px 15px 15px; text-align: center; ' + textStyle + '"><strong style="color: ' + accentColor + '; font-size: 18px;">' + cost.toLocaleString() + '원</strong></td>';
+      html += '<td style="padding: 5px 15px 15px 15px; text-align: center; ' + textStyle + '"><strong style="color: ' + accentColor + '; font-size: 18px;">' + (cost * item.cnt).toLocaleString() + '원</strong></td>';
+      html += '</tr>';
+    });
+    
+    html += '</tbody>';
+    html += '</table>';
+    html += '</div>';
+    
+    html += '</div>';
     
     container.innerHTML = html;
   }
@@ -521,7 +534,6 @@
   }
 
   function displayOrderView(orders) {
-    // 주문서 정보 추출
     const orderSerialNumber = orders[0].serialNumber;
     const orderDateStr = orders[0].date.toString();
     const year = orderDateStr.substring(0, 4);
@@ -529,12 +541,10 @@
     const day = orderDateStr.substring(6, 8);
     const formattedDate = year + '년 ' + parseInt(month) + '월 ' + parseInt(day) + '일';
 
-    // 주문 시간 포맷팅
     const orderTime = orders[0].time || '-';
     const payType = orders[0].payType || '-';
     const isCanceled = orders[0].isCanceled === true;
 
-    // 합계 계산
     let totalAmount = 0;
     let totalQty = 0;
     orders.forEach(function(order) {
@@ -542,49 +552,34 @@
       totalQty += order.cnt || 0;
     });
 
-    // ✅ NEW: Modern white card style
-    let html = '';
+    const cardBorder = isCanceled ? 'border: 2px solid #fee2e2; border-left: 5px solid #dc2626;' : 'border: 2px solid #e8ecef; border-left: 5px solid #3498db;';
+    const titleColor = isCanceled ? '#dc2626' : '#2c3e50';
+    const accentColor = isCanceled ? '#dc2626' : '#3498db';
 
-    // Header card
+    let html = '<div style="background: white; ' + cardBorder + ' padding: 25px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);">';
+    
+    // Header
+    html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">';
+    html += '<div>';
+    html += '<h3 style="font-size: 28px; color: ' + titleColor + '; margin: 0 0 8px 0; font-weight: 700;">';
+    html += orderSerialNumber;
+    html += '</h3>';
+    html += '</div>';
+    
+    // Cancel badge or button
+    html += '<div style="display: flex; gap: 8px;">';
     if (isCanceled) {
-      html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #fee2e2; border-left: 5px solid #dc2626;">';
-      html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">';
-      html += '<span style="font-size: 42px;">❌</span>';
-      html += '<div>';
-      html += '<h2 style="font-size: 38px; color: #2c3e50; margin: 0; font-weight: 700;">주문서 상세 정보</h2>';
-      html += '<div style="background: #fee2e2; color: #dc2626; display: inline-block; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 18px; margin-top: 8px;">취소된 주문</div>';
-      html += '</div>';
-      html += '</div>';
+      html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
     } else {
-      html += '<div style="background: white; padding: 30px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 2px solid #e8ecef; border-left: 5px solid #3498db;">';
-      html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">';
-      html += '<span style="font-size: 42px;">📋</span>';
-      html += '<h2 style="font-size: 38px; color: #2c3e50; margin: 0; font-weight: 700;">주문서 상세 정보</h2>';
-      html += '</div>';
+      html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrder(\'' + orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
     }
-    
-    // Order info grid
-    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 20px;">';
-    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
-    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">주문서 번호</div>';
-    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600; font-family: monospace;">' + orderSerialNumber + '</div>';
+    html += '</div>';
     html += '</div>';
     
-    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
-    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">주문 날짜</div>';
-    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600;">' + formattedDate + '</div>';
-    html += '</div>';
-    
-    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
-    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">주문 시간</div>';
-    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600;">' + orderTime + '</div>';
-    html += '</div>';
-    
-    html += '<div style="background: #f8f9fa; padding: 16px; border-radius: 12px;">';
-    html += '<div style="color: #7f8c8d; font-size: 16px; margin-bottom: 6px;">결제 방법</div>';
-    html += '<div style="color: #2c3e50; font-size: 22px; font-weight: 600;">' + payType + '</div>';
-    html += '</div>';
-    html += '</div>';
+    // Info
+    html += '<div style="color: #7f8c8d; font-size: 18px; line-height: 1.8; margin-bottom: 20px;">';
+    html += '주문 시간: <strong style="color: #2c3e50;">' + orderTime + '</strong><br>';
+    html += '주문 금액: <strong style="color: ' + accentColor + ';">' + totalAmount.toLocaleString() + '원</strong> (' + payType + ')';
     html += '</div>';
 
     // Items section
@@ -689,12 +684,13 @@
     google.script.run
       .withSuccessHandler(function(result) {
         if (result.success) {
-          // ✅ NEW: Invalidate frontend cache
-          inventoryStatusCache = null;
-          inventoryStatusCacheTime = null;
-          console.log('Frontend cache INVALIDATED: inventory_status (order canceled)');
+
+          // Invalidate latest order cache
+          latestOrderCache = null;
+          latestOrderCacheTime = null;
 
           alert('주문이 취소되었습니다.\n\n취소된 품목 수: ' + result.canceledRows + '개\n재고가 복원되었습니다.');
+          
           // Reload the order view to show updated status
           const dateStr = orderSerialNumber.substring(0, 8);
           const indexStr = parseInt(orderSerialNumber.substring(8));
@@ -804,15 +800,14 @@
       html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">';
       html += '<div>';
       html += '<h3 style="font-size: 28px; color: ' + titleColor + '; margin: 0 0 8px 0; font-weight: 700;">';
-      html += '주문서 #' + orderGroup.index;
+      html += orderSerialNumber;  // ✅ 202511030001
       html += '</h3>';
-      html += '<div style="font-family: monospace; color: #7f8c8d; font-size: 16px;">' + orderSerialNumber + '</div>';
       html += '</div>';
       
       if (isCanceled) {
         html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
       } else {
-        html += '<button class="btn btn-secondary btn-small" onclick="generateReceiptFromList(\'' + orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content; background: white; color: #667eea; font-weight: 600;">📄 영수증</button>';
+        html += '<button class="btn btn-secondary btn-small" onclick="generateReceiptFromList(\'' + orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">📄 영수증</button>';
         html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrderFromList(\'' + orderSerialNumber + '\', \'' + orderDate + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
       }
       html += '</div>';
@@ -820,8 +815,7 @@
       // ✅ NEW: Simple text info (removed card-style grid)
       html += '<div style="color: #7f8c8d; font-size: 18px; line-height: 1.8; margin-bottom: 20px;">';
       html += '주문 시간: <strong style="color: #2c3e50;">' + orderTime + '</strong><br>';
-      html += '결제 방법: <strong style="color: #2c3e50;">' + payType + '</strong><br>';
-      html += '주문 금액: <strong style="color: ' + accentColor + ';">' + orderAmount.toLocaleString() + '원</strong>';
+      html += '주문 금액: <strong style="color: ' + accentColor + ';">' + orderAmount.toLocaleString() + '원</strong> (' + payType + ')';
       html += '</div>';
       
       html += '<div style="overflow-x: auto;">';
@@ -925,21 +919,23 @@
 
           alert('주문이 취소되었습니다.\n\n취소된 품목 수: ' + result.canceledRows + '개\n재고가 복원되었습니다.');
           
-          // ✅ Reload the entire order list to show updated status
-          google.script.run
-            .withSuccessHandler(function(listResult) {
-              if (listResult.success) {
-                hideAllScreens();
-                const s = document.getElementById('orderViewScreen');
-                s.style.display = 'block';
-                s.classList.add('active');
-                displayOrderList(orderDate, listResult.orderList);
-              }
-            })
-            .withFailureHandler(function(error) {
-              alert('주문 목록 새로고침 중 오류 발생:\n' + error);
-            })
-            .getOrderListByDate(orderDate);
+          // ✅ 주문 관리 메인 화면이면 카드만 새로고침
+          if (document.getElementById('orderMainScreen').classList.contains('active')) {
+            loadLatestOrderCard();
+          } else {
+            // ✅ 목록 화면이면 목록 새로고침
+            google.script.run
+              .withSuccessHandler(function(listResult) {
+                if (listResult.success) {
+                  hideAllScreens();
+                  const s = document.getElementById('orderViewScreen');
+                  s.style.display = 'block';
+                  s.classList.add('active');
+                  displayOrderList(orderDate, listResult.orderList);
+                }
+              })
+              .getOrderListByDate(orderDate);
+          }
         } else {
           alert('주문 취소 실패:\n' + result.message);
         }
@@ -1222,19 +1218,15 @@
       .withSuccessHandler(function(result) {
         // ✅ Reset submitting flag
         isSubmitting = false;
-
+        
+        // ✅ Invalidate frontend cache
+        latestOrderCache = null;
+        latestOrderCacheTime = null;
+        
         if (result.success) {
-          // ✅ NEW: Invalidate frontend cache
-          inventoryStatusCache = null;
-          inventoryStatusCacheTime = null;
-          console.log('Frontend cache INVALIDATED: inventory_status (order created)');
-
           submitBtn.textContent = '✅ 주문 완료!';
           submitBtn.style.opacity = '1';
           showOrderMessage('주문이 완료되었습니다!', 'success');
-          
-          // Invalidate latest order cache
-          invalidateLatestOrderCache();
 
           setTimeout(() => {
             // 주문서 메인으로 돌아가기
@@ -1269,19 +1261,6 @@
         showOrderMessage('주문 처리 중 오류: ' + error, 'error');
       })
       .saveOrder(orderData);
-  }
-
-  // ===== Invalidate Latest Order Cache =====
-  function invalidateLatestOrderCache() {
-    // This will force cache refresh on next load
-    google.script.run
-      .withSuccessHandler(function() {
-        console.log('✓ Latest order cache invalidated');
-      })
-      .withFailureHandler(function(error) {
-        console.log('✗ Failed to invalidate cache:', error);
-      })
-      .invalidateCache('LATEST_ORDER');
   }
 
   function showOrderMessage(msg, type) {
@@ -2434,9 +2413,8 @@
       html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">';
       html += '<div>';
       html += '<h3 style="font-size: 28px; color: ' + titleColor + '; margin: 0 0 8px 0; font-weight: 700;">';
-      html += formattedDate + ' - 주문서 #' + orderGroup.index;
+      html += orderSerialNumber;  // ✅ 202511030001
       html += '</h3>';
-      html += '<div style="font-family: monospace; color: #7f8c8d; font-size: 16px;">' + orderSerialNumber + '</div>';
       html += '</div>';
       
       // ✅ 영수증 버튼 추가
@@ -2444,7 +2422,7 @@
       if (isCanceled) {
         html += '<div style="background: #fee2e2; color: #dc2626; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 16px; white-space: nowrap; height: fit-content;">❌ 취소됨</div>';
       } else {
-        html += '<button class="btn btn-secondary btn-small" onclick="generateReceiptFromList(\'' + orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content; background: #f0f0f0; color: #667eea; font-weight: 600;">📄 영수증</button>';
+        html += '<button class="btn btn-secondary btn-small" onclick="generateReceiptFromList(\'' + orderSerialNumber + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">📄 영수증</button>';
         html += '<button class="btn btn-secondary btn-small" onclick="confirmCancelOrderFromList(\'' + orderSerialNumber + '\', \'' + orderGroup.date + '\')" style="margin: 0; white-space: nowrap; height: fit-content;">❌ 취소</button>';
       }
       html += '</div>';
@@ -2453,8 +2431,7 @@
       // Simple text info
       html += '<div style="color: #7f8c8d; font-size: 18px; line-height: 1.8; margin-bottom: 20px;">';
       html += '주문 시간: <strong style="color: #2c3e50;">' + orderTime + '</strong><br>';
-      html += '결제 방법: <strong style="color: #2c3e50;">' + payType + '</strong><br>';
-      html += '주문 금액: <strong style="color: ' + accentColor + ';">' + orderAmount.toLocaleString() + '원</strong>';
+      html += '주문 금액: <strong style="color: ' + accentColor + ';">' + orderAmount.toLocaleString() + '원</strong> (' + payType + ')';
       html += '</div>';
       
       html += '<div style="overflow-x: auto;">';

@@ -31,6 +31,13 @@ const CACHE_DURATION = {
 // Get latest order created today
 function getLatestTodayOrder() {
   try {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayDate = parseInt(year + month + day);
+    Logger.log('Today date: ' + todayDate);
+
     // ✅ Step 1: Check cache first
     const cached = getCachedData(CACHE_KEYS.LATEST_ORDER);
     if (cached) {
@@ -40,13 +47,7 @@ function getLatestTodayOrder() {
     
     // ✅ Step 2: Cache miss - fetch from DB
     Logger.log('✗ Cache miss - fetching latest order from DB');
-    
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayDate = parseInt(year + month + day);
-    
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const orderSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
     
@@ -59,7 +60,7 @@ function getLatestTodayOrder() {
     
     const data = orderSheet.getDataRange().getValues();
     
-    if (data.length <= 1) {
+    if (data.length < 1) {
       return {
         success: true,
         hasOrder: false,
@@ -611,34 +612,9 @@ function getNewOrderIndex(orderDate) {
         message: 'Invalid date format. Must be YYYYMMDD format. (Input: ' + dateStr + ')'
       };
     }
-    
-    // Date validity check
-    const year = parseInt(dateStr.substring(0, 4));
-    const month = parseInt(dateStr.substring(4, 6));
-    const day = parseInt(dateStr.substring(6, 8));
-    
-    if (year < 2000 || year > 2100) {
-      return {
-        success: false,
-        message: 'Invalid year: ' + year
-      };
-    }
-    
-    if (month < 1 || month > 12) {
-      return {
-        success: false,
-        message: 'Invalid month: ' + month
-      };
-    }
-    
-    if (day < 1 || day > 31) {
-      return {
-        success: false,
-        message: 'Invalid day: ' + day
-      };
-    }
-    
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const dashboardSheet = ss.getSheetByName('Dashboard');
     
     if (!ss) {
       return {
@@ -647,90 +623,16 @@ function getNewOrderIndex(orderDate) {
       };
     }
     
-    let sheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
-    
-    if (!sheet) {
-      Logger.log('PurchaseOrder sheet does not exist, attempting to create...');
-      
-      try {
-        sheet = ss.insertSheet(PURCHASE_ORDER_SHEET_NAME);
-        sheet.appendRow([
-          'Order_SerialNumber', 
-          'Order_Date', 
-          'Order_Index', 
-          'Order_CodeNum',
-          'Order_Name', 
-          'Order_Description', 
-          'Order_CostB2B', 
-          'Order_CostB2C', 
-          'Order_IsB2B', 
-          'Order_Cnt',
-          'PayType',
-          'Order_TotalCost',
-          'IsCanceled'
-        ]);
-        Logger.log('PurchaseOrder sheet created successfully.');
-        
-        return {
-          success: true,
-          orderIndex: 1,
-          message: 'New sheet created.'
-        };
-      } catch (createError) {
-        return {
-          success: false,
-          message: 'Failed to find or create PurchaseOrder sheet: ' + createError.toString()
-        };
-      }
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    
-    // Empty Data = First Order
-    if (data.length <= 1) {
-      return {
-        success: true,
-        orderIndex: 1,
-        message: 'First order.'
-      };
-    }
-    
-    const headers = data[0];
-    const dateColIndex = headers.indexOf('Order_Date');
-    const indexColIndex = headers.indexOf('Order_Index');
-    
-    // Validate required columns
-    if (dateColIndex === -1) {
+    if (!dashboardSheet) {
       return {
         success: false,
-        message: 'Cannot find Order_Date column. Please check sheet structure.'
+        message: 'Dashboard sheet not found.'
       };
     }
     
-    if (indexColIndex === -1) {
-      return {
-        success: false,
-        message: 'Cannot find Order_Index column. Please check sheet structure.'
-      };
-    }
-    
-    let maxIndex = 0;
-    let sameDataCount = 0;
-    
-    // Find max index for same date
-    for (let i = 1; i < data.length; i++) {
-      const rowDate = data[i][dateColIndex];
-      const rowIndex = parseInt(data[i][indexColIndex]) || 0;
-      
-      if (rowDate && rowDate.toString() === orderDate.toString()) {
-        sameDataCount++;
-        if (rowIndex > maxIndex) {
-          maxIndex = rowIndex;
-        }
-      }
-    }
-    
-    const newIndex = maxIndex + 1;
+    // ✅ Dashboard B5 값 읽기 (오늘 주문서 개수)
+    const existingOrderCount = dashboardSheet.getRange('B5').getValue() || 0;
+    const newIndex = existingOrderCount + 1;
     
     // Validate index range (max 9999)
     if (newIndex > 9999) {
@@ -739,11 +641,8 @@ function getNewOrderIndex(orderDate) {
         message: 'Exceeded maximum orders per day (9999).'
       };
     }
-    
-    // Num of Orders = Last Order Index.
-    const existingOrderCount = maxIndex;
 
-    Logger.log(`날짜 ${orderDate}의 주문서: 기존 ${existingOrderCount}개, 새 인덱스: ${newIndex}`);
+    Logger.log(`날짜 ${orderDate}: 기존 ${existingOrderCount}개, 새 인덱스: ${newIndex}`);
     
     return {
       success: true,
@@ -752,16 +651,7 @@ function getNewOrderIndex(orderDate) {
     };
     
   } catch (error) {
-    // Detailed error logging
-    const errorDetails = {
-      message: error.message,
-      stack: error.stack,
-      orderDate: orderDate,
-      timestamp: new Date().toISOString()
-    };
-    
-    Logger.log('New order index query error: ' + JSON.stringify(errorDetails, null, 2));
-    
+    Logger.log('Error getting new order index: ' + error.toString());
     return {
       success: false,
       message: 'An error occurred: ' + error.message
@@ -970,7 +860,8 @@ function saveOrder(orderData) {
       // ✅ NEW: Invalidate caches after order creation
       invalidateCaches([
         CACHE_KEYS.DASHBOARD_INFO,
-        CACHE_KEYS.INVENTORY_STATUS
+        CACHE_KEYS.INVENTORY_STATUS,
+        CACHE_KEYS.LATEST_ORDER
       ]);
 
       return {
@@ -1075,7 +966,8 @@ function cancelOrder(orderSerialNumber) {
     // ✅ NEW: Invalidate caches after order cancellation
     invalidateCaches([
       CACHE_KEYS.DASHBOARD_INFO,
-      CACHE_KEYS.INVENTORY_STATUS
+      CACHE_KEYS.INVENTORY_STATUS,
+      CACHE_KEYS.LATEST_ORDER
     ]);
 
     return {
@@ -1789,3 +1681,31 @@ function generateReceiptPDF(orderSerialNumber) {
     };
   }
 }
+
+function getTodayOrderCount() {
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const dashboardSheet = ss.getSheetByName('Dashboard');
+      
+      if (!dashboardSheet) {
+        return {
+          success: false,
+          message: 'Dashboard sheet not found.'
+        };
+      }
+      
+      const orderCount = dashboardSheet.getRange('B5').getValue() || 0;
+      
+      return {
+        success: true,
+        orderCount: orderCount
+      };
+      
+    } catch (error) {
+      Logger.log('Error getting today order count: ' + error.toString());
+      return {
+        success: false,
+        message: 'An error occurred: ' + error.toString()
+      };
+    }
+  }
