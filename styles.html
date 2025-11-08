@@ -1462,6 +1462,124 @@
   color: #16a34a;
   }
 
+  /* ====================================
+  Latest Order Card Styles
+  ==================================== */
+
+  .latest-order-card {
+    background: white;
+    border-radius: 16px;
+    padding: clamp(25px, 3.5vw, 30px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 2px solid #e8ecef;
+    border-left: 5px solid #27ae60;
+    transition: all 0.3s ease;
+  }
+
+  .latest-order-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .latest-order-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e8ecef;
+  }
+
+  .latest-order-title {
+    font-size: clamp(22px, 3.5vw, 28px);
+    color: #27ae60;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .latest-order-badge {
+    background: #d4edda;
+    color: #155724;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: clamp(14px, 2vw, 16px);
+    font-weight: 600;
+  }
+
+  .latest-order-badge.canceled {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+
+  .latest-order-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+
+  .latest-order-info-item {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 12px;
+  }
+
+  .latest-order-info-label {
+    font-size: clamp(13px, 1.8vw, 15px);
+    color: #7f8c8d;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .latest-order-info-value {
+    font-size: clamp(18px, 2.8vw, 22px);
+    color: #2c3e50;
+    font-weight: 700;
+  }
+
+  .latest-order-items {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+  }
+
+  .latest-order-items-title {
+    font-size: clamp(15px, 2.2vw, 18px);
+    color: #2c3e50;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .latest-order-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #e8ecef;
+    font-size: clamp(14px, 2vw, 16px);
+    color: #2c3e50;
+  }
+
+  .latest-order-item:last-child {
+    border-bottom: none;
+  }
+
+  .latest-order-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .latest-order-empty {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: clamp(20px, 3vw, 30px);
+    text-align: center;
+    color: #7f8c8d;
+    font-size: clamp(16px, 2.5vw, 20px);
+    border: 2px dashed #e8ecef;
+  }
+
   /* Mobile Responsive */
   @media (max-width: 768px) {
     body {
@@ -1543,12 +1661,26 @@
       padding: 10px 8px;
       font-size: 14px;
     }
+
     .inventory-status-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+      grid-template-columns: 1fr;
+      gap: 12px;
     }
+    
     .inventory-status-item {
-    padding: 15px;
+      padding: 15px;
+    }
+
+    .latest-order-info-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .latest-order-buttons {
+      flex-direction: column;
+    }
+    
+    .latest-order-buttons .btn {
+      width: 100%;
     }
   }
 

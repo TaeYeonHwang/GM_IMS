@@ -9,6 +9,10 @@
   let allInventoryItems = [];  // 전체 1500개 저장
   let inventorySearchText = '';
   let isSubmitting = false;  // ✅ ADD: Prevent double submission
+  let inventoryStatusCache = null;
+  let inventoryStatusCacheTime = null;
+  let inventorySearchTimeout = null; // ✅ ADD: Timer value for Debouncing
+  const INVENTORY_STATUS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   // Handle browser back button
   window.addEventListener('popstate', function(event) {
@@ -158,13 +162,22 @@
     s.classList.add('active');
     stopOrderQRCamera();
 
-    // ✅ Reset status counts
-    document.getElementById('inventoryOutCount').textContent = '-';
-    document.getElementById('inventoryLowCount').textContent = '-';
-    document.getElementById('inventoryNormalCount').textContent = '-';
-    
-    // ✅ Load inventory status
-    loadInventoryStatus();
+    // ✅ NEW: Check local cache first
+    const now = Date.now();
+    if (inventoryStatusCache && inventoryStatusCacheTime && 
+        (now - inventoryStatusCacheTime < INVENTORY_STATUS_CACHE_DURATION)) {
+      // Cache HIT - display immediately
+      console.log('Frontend cache HIT: inventory_status');
+      updateInventoryStatusUI(inventoryStatusCache);
+    } else {
+      // Cache MISS - show loading and fetch from server
+      console.log('Frontend cache MISS: inventory_status');
+      document.getElementById('inventoryOutCount').textContent = '-';
+      document.getElementById('inventoryLowCount').textContent = '-';
+      document.getElementById('inventoryNormalCount').textContent = '-';
+      
+      loadInventoryStatus();
+    }
 
     navigateToScreen('inventoryMenuScreen');
   }
@@ -174,10 +187,12 @@
     google.script.run
       .withSuccessHandler(function(result) {
         if (result.success) {
-          // ✅ Just display the values from sheet
-          document.getElementById('inventoryOutCount').textContent = result.outCount + '개';
-          document.getElementById('inventoryLowCount').textContent = result.lowCount + '개';
-          document.getElementById('inventoryNormalCount').textContent = result.normalCount + '개';
+          // ✅ NEW: Save to frontend cache
+          inventoryStatusCache = result;
+          inventoryStatusCacheTime = Date.now();
+          console.log('Frontend cache SET: inventory_status');
+          // Update UI
+          updateInventoryStatusUI(result);
         } else {
           console.error('Failed to load inventory status:', result.message);
           // Show error counts
@@ -194,6 +209,13 @@
         document.getElementById('inventoryNormalCount').textContent = '?';
       })
       .getInventoryStatusCountsFromSheet();
+  }
+
+  // ✅ NEW: Update inventory status UI
+  function updateInventoryStatusUI(result) {
+    document.getElementById('inventoryOutCount').textContent = result.outCount + '개';
+    document.getElementById('inventoryLowCount').textContent = result.lowCount + '개';
+    document.getElementById('inventoryNormalCount').textContent = result.normalCount + '개';
   }
 
   function showOrderMenu() {
@@ -224,13 +246,16 @@
 
     document.getElementById('todayDateText').textContent = `${year}년 ${month}월 ${day}일`;
     
-    // 조회 입력 필드에 오늘 날짜 기본값 설정
+    // Set Today as a default date in Search input field.
     document.getElementById('searchOrderYear').value = year;
     document.getElementById('searchOrderMonth').value = month;
     document.getElementById('searchOrderDay').value = day;
     
-    // ✅ NEW: Update tab info
+    // Update tab info
     updateTabInfo();
+
+    // Load latest order card
+    loadLatestOrderCard();
 
     // 오늘 생성된 주문서 수 조회
     const orderDate = year.toString() + month.toString().padStart(2, '0') + day.toString().padStart(2, '0');
@@ -276,6 +301,172 @@
 
       navigateToScreen('orderMainScreen');
   }
+
+  // ===== Load Latest Order Card =====
+  function loadLatestOrderCard() {
+    const container = document.getElementById('latestOrderCard');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div><div>직전 주문서 로딩 중...</div></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success && result.hasOrder) {
+          displayLatestOrderCard(result);
+        } else if (result.success && !result.hasOrder) {
+          // No orders today
+          container.innerHTML = `
+            <div class="latest-order-empty">
+              📭 ${result.message}
+            </div>
+          `;
+        } else {
+          container.innerHTML = `
+            <div class="alert alert-error">
+              ${result.message}
+            </div>
+          `;
+        }
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = `
+          <div class="alert alert-error">
+            직전 주문서 로드 중 오류: ${error}
+          </div>
+        `;
+      })
+      .getLatestTodayOrder();
+  }
+
+  // ===== Display Latest Order Card =====
+  function displayLatestOrderCard(data) {
+    const container = document.getElementById('latestOrderCard');
+    
+    const isCanceled = data.isCanceled === true;
+    const badgeClass = isCanceled ? 'canceled' : '';
+    const badgeText = isCanceled ? '❌ 취소됨' : '✅ 최신';
+    
+    let html = '<div class="latest-order-card">';
+    
+    // Header
+    html += '<div class="latest-order-card-header">';
+    html += '<div class="latest-order-title">';
+    html += `📋 직전 주문서 - #${data.orderIndex}`;
+    html += '</div>';
+    html += `<div class="latest-order-badge ${badgeClass}">${badgeText}</div>`;
+    html += '</div>';
+    
+    // Info Grid
+    html += '<div class="latest-order-info-grid">';
+    
+    html += '<div class="latest-order-info-item">';
+    html += '<div class="latest-order-info-label">주문 시간</div>';
+    html += `<div class="latest-order-info-value">${data.orderTime}</div>`;
+    html += '</div>';
+    
+    html += '<div class="latest-order-info-item">';
+    html += '<div class="latest-order-info-label">결제 방법</div>';
+    html += `<div class="latest-order-info-value">${data.payType}</div>`;
+    html += '</div>';
+    
+    html += '<div class="latest-order-info-item">';
+    html += '<div class="latest-order-info-label">품목 수</div>';
+    html += `<div class="latest-order-info-value">${data.itemCount}개</div>`;
+    html += '</div>';
+    
+    html += '<div class="latest-order-info-item">';
+    html += '<div class="latest-order-info-label">총 금액</div>';
+    html += `<div class="latest-order-info-value" style="color: #27ae60;">${data.totalAmount.toLocaleString()}원</div>`;
+    html += '</div>';
+    
+    html += '</div>'; // End info-grid
+    
+    // Items Preview
+    if (data.items && data.items.length > 0) {
+      html += '<div class="latest-order-items">';
+      html += '<div class="latest-order-items-title">📦 주문 품목 미리보기</div>';
+      
+      data.items.forEach(item => {
+        html += `<div class="latest-order-item">• ${item.name} (${item.cnt}개)</div>`;
+      });
+      
+      if (data.itemCount > 3) {
+        html += `<div class="latest-order-item" style="color: #7f8c8d; font-style: italic;">... 외 ${data.itemCount - 3}개 품목</div>`;
+      }
+      
+      html += '</div>';
+    }
+    
+    // Buttons
+    html += '<div class="latest-order-buttons">';
+    html += `<button class="btn btn-secondary btn-small" onclick="viewLatestOrder('${data.orderSerialNumber}')">`;
+    html += '📄 자세히 보기';
+    html += '</button>';
+    
+    if (!isCanceled) {
+      html += `<button class="btn btn-secondary btn-small" onclick="generateReceiptFromLatest('${data.orderSerialNumber}')">`;
+      html += '🧾 영수증 생성';
+      html += '</button>';
+    }
+    
+    html += '</div>';
+    
+    html += '</div>'; // End card
+    
+    container.innerHTML = html;
+  }
+
+  // ===== View Latest Order =====
+  function viewLatestOrder(orderSerialNumber) {
+    const dateStr = orderSerialNumber.substring(0, 8);
+    const indexStr = parseInt(orderSerialNumber.substring(8));
+    
+    showLoadingMessage('주문서 상세 정보를 불러오는 중...');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingMessage();
+        if (result.success) {
+          hideAllScreens();
+          const s = document.getElementById('orderViewScreen');
+          s.style.display = 'block';
+          s.classList.add('active');
+          displayOrderView(result.orders);
+          navigateToScreen('orderViewScreen');
+        } else {
+          alert(result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoadingMessage();
+        alert('주문서 조회 중 오류: ' + error);
+      })
+      .getOrderData(dateStr, indexStr);
+  }
+
+  // ===== Generate Receipt from Latest =====
+  function generateReceiptFromLatest(orderSerialNumber) {
+    showLoadingMessage('영수증을 생성하는 중...');
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingMessage();
+        
+        if (result.success) {
+          alert(`영수증 ${result.count}개가 생성되었습니다!`);
+          
+          if (result.files.length > 0) {
+            window.open(result.files[0].url, '_blank');
+          }
+        } else {
+          alert('영수증 생성 실패: ' + result.message);
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoadingMessage();
+        alert('영수증 생성 중 오류: ' + error);
+      })
+      .generateReceiptPDF(orderSerialNumber);
+  }
+
 
   function showNewOrderForm() {
     hideAllScreens();
@@ -498,6 +689,11 @@
     google.script.run
       .withSuccessHandler(function(result) {
         if (result.success) {
+          // ✅ NEW: Invalidate frontend cache
+          inventoryStatusCache = null;
+          inventoryStatusCacheTime = null;
+          console.log('Frontend cache INVALIDATED: inventory_status (order canceled)');
+
           alert('주문이 취소되었습니다.\n\n취소된 품목 수: ' + result.canceledRows + '개\n재고가 복원되었습니다.');
           // Reload the order view to show updated status
           const dateStr = orderSerialNumber.substring(0, 8);
@@ -722,6 +918,11 @@
     google.script.run
       .withSuccessHandler(function(result) {
         if (result.success) {
+          // ✅ NEW: Invalidate frontend cache
+          inventoryStatusCache = null;
+          inventoryStatusCacheTime = null;
+          console.log('Frontend cache INVALIDATED: inventory_status (order canceled)');
+
           alert('주문이 취소되었습니다.\n\n취소된 품목 수: ' + result.canceledRows + '개\n재고가 복원되었습니다.');
           
           // ✅ Reload the entire order list to show updated status
@@ -1019,14 +1220,22 @@
     
     google.script.run
       .withSuccessHandler(function(result) {
-        // ✅ Reset submitting flag// ✅ Reset submitting flag
+        // ✅ Reset submitting flag
         isSubmitting = false;
 
         if (result.success) {
+          // ✅ NEW: Invalidate frontend cache
+          inventoryStatusCache = null;
+          inventoryStatusCacheTime = null;
+          console.log('Frontend cache INVALIDATED: inventory_status (order created)');
+
           submitBtn.textContent = '✅ 주문 완료!';
           submitBtn.style.opacity = '1';
           showOrderMessage('주문이 완료되었습니다!', 'success');
           
+          // Invalidate latest order cache
+          invalidateLatestOrderCache();
+
           setTimeout(() => {
             // 주문서 메인으로 돌아가기
             showOrderMain();
@@ -1060,6 +1269,19 @@
         showOrderMessage('주문 처리 중 오류: ' + error, 'error');
       })
       .saveOrder(orderData);
+  }
+
+  // ===== Invalidate Latest Order Cache =====
+  function invalidateLatestOrderCache() {
+    // This will force cache refresh on next load
+    google.script.run
+      .withSuccessHandler(function() {
+        console.log('✓ Latest order cache invalidated');
+      })
+      .withFailureHandler(function(error) {
+        console.log('✗ Failed to invalidate cache:', error);
+      })
+      .invalidateCache('LATEST_ORDER');
   }
 
   function showOrderMessage(msg, type) {
@@ -1169,6 +1391,12 @@
     document.getElementById('inventorySearchInfo').innerHTML = '<div class="loading-dot">로딩 중...</div>';
     
     loadAllItems();
+
+    // Auto focus on search input
+    setTimeout(() => {
+      document.getElementById('inventorySearchInput').focus();
+    }, 100);
+
     navigateToScreen('listScreen');
   }
 
@@ -1722,13 +1950,26 @@
       .getDashboardInfo();
   }
 
-  // ===== NEW: handleInventorySearch function =====
+  // For Input Timer.
   function handleInventorySearch() {
+    // Cancel previous timer if exists
+    if (inventorySearchTimeout) {
+      clearTimeout(inventorySearchTimeout);
+    }
+    
+    // Execute search after 300ms delay
+    inventorySearchTimeout = setTimeout(() => {
+      executeInventorySearch();
+    }, 500);  // 500ms = 0.5 sec delay
+  }
+
+  // Execute inventory search
+  function executeInventorySearch() {
     const searchInput = document.getElementById('inventorySearchInput');
     inventorySearchText = searchInput.value.trim().toLowerCase();
     
     if (inventorySearchText === '') {
-      // ✅ Changed: 검색어 없으면 전체 표시
+      // 검색어 없으면 전체 표시
       renderInventoryItems(allInventoryItems);
       updateInventorySearchInfo(allInventoryItems.length, allInventoryItems.length);
     } else {
@@ -1899,6 +2140,11 @@
         document.getElementById('inventorySearchInput').value = code.data;
         stopInventoryQRCamera();
         handleInventorySearch();
+
+        // Focus back to search input after QR scan
+        setTimeout(() => {
+          document.getElementById('inventorySearchInput').focus();
+        }, 100);
       } else {
         alert('QR 코드를 인식할 수 없습니다. 다시 시도해주세요.');
       }
@@ -1907,7 +2153,7 @@
     }
   }
 
-  // ===== NEW: Order Tab Functions =====
+  // ===== Order Tab Functions =====
   function switchOrderTab(tabName) {
     // Remove active class from all tabs and contents
     document.querySelectorAll('.order-tab').forEach(tab => {

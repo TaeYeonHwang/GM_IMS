@@ -14,33 +14,279 @@ const SHEET_NAME = 'ItemInfo';
 const LOG_SHEET_NAME = 'AccessLog';
 const PURCHASE_ORDER_SHEET_NAME = 'PurchaseOrder';
 
-// HTML 파일 include 함수.
+// ===== Cache Service Utility Functions =====
+const CACHE_KEYS = {
+  DASHBOARD_INFO: 'dashboard_info',
+  INVENTORY_STATUS: 'inventory_status',
+  REVISION_INFO: 'revision_info',
+  LATEST_ORDER: 'latest_order_info'
+};
+const CACHE_DURATION = {
+  DASHBOARD: 600,      // 10 minutes
+  INVENTORY: 600,      // 10 minutes
+  REVISION: 3600,      // 1 hour
+  LATEST_ORDER: 3600   // 1 hour
+};
+
+// Get latest order created today
+function getLatestTodayOrder() {
+  try {
+    // ✅ Step 1: Check cache first
+    const cached = getCachedData(CACHE_KEYS.LATEST_ORDER);
+    if (cached) {
+      Logger.log('✓ Latest order from cache');
+      return cached;
+    }
+    
+    // ✅ Step 2: Cache miss - fetch from DB
+    Logger.log('✗ Cache miss - fetching latest order from DB');
+    
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayDate = parseInt(year + month + day);
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const orderSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    
+    if (!orderSheet) {
+      return {
+        success: false,
+        message: 'PurchaseOrder sheet not found.'
+      };
+    }
+    
+    const data = orderSheet.getDataRange().getValues();
+    
+    if (data.length <= 1) {
+      return {
+        success: true,
+        hasOrder: false,
+        message: '오늘 생성된 주문서가 없습니다.'
+      };
+    }
+    
+    const headers = data[0];
+    const colIndices = {};
+    const requiredCols = [
+      'Order_SerialNumber', 'Order_Date', 'Order_Time', 'Order_Index',
+      'Order_CodeNum', 'Order_Name', 'Order_Description',
+      'Order_CostB2B', 'Order_CostB2C', 'Order_IsB2B', 'Order_Cnt',
+      'PayType', 'Order_TotalCost', 'IsCanceled'
+    ];
+    
+    requiredCols.forEach(col => {
+      const index = headers.indexOf(col);
+      if (index !== -1) {
+        colIndices[col] = index;
+      }
+    });
+    
+    // Find max order index for today
+    let maxIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      const rowDate = data[i][colIndices['Order_Date']];
+      const rowIndex = parseInt(data[i][colIndices['Order_Index']]) || 0;
+      
+      if (rowDate && parseInt(rowDate.toString()) === todayDate) {
+        if (rowIndex > maxIndex) {
+          maxIndex = rowIndex;
+        }
+      }
+    }
+    
+    // No orders today
+    if (maxIndex === -1) {
+      const result = {
+        success: true,
+        hasOrder: false,
+        message: '오늘 생성된 주문서가 없습니다.'
+      };
+      
+      // Cache for 1 hour
+      setCachedData(CACHE_KEYS.LATEST_ORDER, result, CACHE_DURATION.LATEST_ORDER);
+      return result;
+    }
+    
+    // Collect all items for the latest order
+    const orderIndexStr = maxIndex.toString().padStart(4, '0');
+    const targetSerialNumber = todayDate.toString() + orderIndexStr;
+    const orders = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const rowSerialNumber = data[i][colIndices['Order_SerialNumber']];
+      
+      if (rowSerialNumber && rowSerialNumber.toString() === targetSerialNumber) {
+        let orderTime = data[i][colIndices['Order_Time']];
+        if (orderTime instanceof Date) {
+          orderTime = Utilities.formatDate(orderTime, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+        } else if (orderTime) {
+          orderTime = orderTime.toString();
+        } else {
+          orderTime = '-';
+        }
+        
+        const canceledValue = data[i][colIndices['IsCanceled']];
+        const isCanceled = canceledValue === '취소';
+        
+        orders.push({
+          serialNumber: data[i][colIndices['Order_SerialNumber']],
+          date: data[i][colIndices['Order_Date']],
+          time: orderTime,
+          index: data[i][colIndices['Order_Index']],
+          codeNum: data[i][colIndices['Order_CodeNum']],
+          name: data[i][colIndices['Order_Name']],
+          description: data[i][colIndices['Order_Description']],
+          costB2B: data[i][colIndices['Order_CostB2B']],
+          costB2C: data[i][colIndices['Order_CostB2C']],
+          isB2B: data[i][colIndices['Order_IsB2B']],
+          cnt: data[i][colIndices['Order_Cnt']],
+          payType: data[i][colIndices['PayType']] || '-',
+          totalCost: data[i][colIndices['Order_TotalCost']],
+          isCanceled: isCanceled
+        });
+      }
+    }
+    
+    if (orders.length === 0) {
+      const result = {
+        success: true,
+        hasOrder: false,
+        message: '오늘 생성된 주문서가 없습니다.'
+      };
+      
+      setCachedData(CACHE_KEYS.LATEST_ORDER, result, CACHE_DURATION.LATEST_ORDER);
+      return result;
+    }
+    
+    // Calculate summary
+    let totalAmount = 0;
+    let totalQty = 0;
+    orders.forEach(order => {
+      totalAmount += order.totalCost || 0;
+      totalQty += order.cnt || 0;
+    });
+    
+    const result = {
+      success: true,
+      hasOrder: true,
+      orderSerialNumber: targetSerialNumber,
+      orderIndex: maxIndex,
+      orderTime: orders[0].time,
+      payType: orders[0].payType,
+      isCanceled: orders[0].isCanceled,
+      itemCount: orders.length,
+      totalQty: totalQty,
+      totalAmount: totalAmount,
+      items: orders.slice(0, 3)  // First 3 items for preview
+    };
+    
+    // ✅ Step 3: Cache for 1 hour
+    setCachedData(CACHE_KEYS.LATEST_ORDER, result, CACHE_DURATION.LATEST_ORDER);
+    Logger.log('✓ Latest order cached for 1 hour');
+    
+    return result;
+    
+  } catch (error) {
+    Logger.log('Error getting latest order: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred: ' + error.toString()
+    };
+  }
+}
+
+/**
+Get data from cache, return null if not found or error
+*/
+function getCachedData(key) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get(key);
+    if (cached) {
+      Logger.log('Cache HIT: ' + key);
+      return JSON.parse(cached);
+    }
+    Logger.log('Cache MISS: ' + key);
+    return null;
+  } catch (error) {
+    Logger.log('Cache read error for key ' + key + ': ' + error.toString());
+    return null;
+  }
+}
+
+/**
+Save data to cache with TTL
+*/
+function setCachedData(key, data, ttlSeconds) {
+  try {
+    const cache = CacheService.getScriptCache();
+    cache.put(key, JSON.stringify(data), ttlSeconds);
+    Logger.log('Cache SET: ' + key + ' (TTL: ' + ttlSeconds + 's)');
+    return true;
+  } catch (error) {
+    Logger.log('Cache write error for key ' + key + ': ' + error.toString());
+    return false;
+  }
+}
+
+/**
+Invalidate specific cache key
+*/
+function invalidateCache(key) {
+  try {
+    const cache = CacheService.getUserCache();
+    const fullKey = CACHE_KEYS[cacheKey];
+    
+    if (fullKey) {
+      cache.remove(fullKey);
+      Logger.log(`✓ Cache invalidated: ${fullKey}`);
+      return { success: true };
+    }
+    
+    return { success: false, message: 'Invalid cache key' };
+  } catch (error) {
+    Logger.log('Error invalidating cache: ' + error.toString());
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+Invalidate multiple cache keys
+*/
+function invalidateCaches(keys) {
+  keys.forEach(key => invalidateCache(key));
+}
+// ===== END: Cache Service Utility Functions =====
+
+// HTML file include function.
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-// GUIDE_IMAGE_ID 가져오기 함수
+// Get GUIDE_IMAGE_ID function.
 function getGuideImageId() {
   const scriptProperties = PropertiesService.getScriptProperties();
   const imageId = scriptProperties.getProperty('GUIDE_IMAGE_ID');
   
   if (!imageId) {
-    Logger.log('GUIDE_IMAGE_ID가 설정되지 않았습니다.');
+    Logger.log('GUIDE_IMAGE_ID is not set.');
     return null;
   }
   
   return imageId;
 }
 
-// ✅ 웹 앱 진입점 수정 (.evaluate() 추가)
+// Web app entry point
 function doGet() {
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
-    .setTitle('바코드 스캔 재고 관리 시스템')
+    .setTitle('GM - Inventory Management System')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// 접근 로그 기록.
+// Log access
 function logAccess(codeNum, userIP) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -56,12 +302,12 @@ function logAccess(codeNum, userIP) {
     
     return { success: true };
   } catch (error) {
-    Logger.log('로그 기록 오류: ' + error.toString());
+    Logger.log('Log access error: ' + error.toString());
     return { success: false, message: error.toString() };
   }
 }
 
-// 코드번호로 품목 검색
+// Search item by code number
 function searchByCodeNum(codeNum) {
   try {
     // Input validation
@@ -97,7 +343,7 @@ function searchByCodeNum(codeNum) {
     
     const searchCode = codeNum.toString().trim();
     
-    // ✅ 더 효율적인 검색 (Array.find 사용)
+    // Efficient search using Array.find
     const foundIndex = data.findIndex(row => 
       row[3] && row[3].toString().trim() === searchCode
     );
@@ -114,8 +360,8 @@ function searchByCodeNum(codeNum) {
           costB2B: row[4],
           costB2C: row[5],
           stockNum: row[6],
-          shortageNum: row[7],     // ✅ NEW
-          isShortage: row[8]       // ✅ NEW
+          shortageNum: row[7],
+          isShortage: row[8]
         },
         rowNumber: foundIndex + 2  // 실제 시트의 행 번호
       };
@@ -135,30 +381,40 @@ function searchByCodeNum(codeNum) {
   }
 }
 
-// 전체 아이템 목록 가져오기
+// Get all items
 function getAllItems() {
   try {
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-    const data = sheet.getDataRange().getValues();
+    // ✅ 개선점 1: 마지막 행 확인
+    const lastRow = sheet.getLastRow();
     
+    if (lastRow < 2) {
+      // No Data case. (only exist header)
+      return {
+        success: true,
+        items: []
+      };
+    }
+
+    // ✅ 개선점 2: A열~I열(9개 컬럼)만 읽기
+    // getRange(startRow, startCol, numRows, numCols)
+    const data = sheet.getRange(2, 1, lastRow - 1, 9).getValues();
+
     Logger.log('Total rows: ' + data.length);
 
     const items = [];
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0]) {
-
-        //Logger.log('Row ' + i + ' IsShortage (column 8): ' + data[i][8]);
-        
+    for (let i = 0; i < data.length; i++) {  // ✅ 인덱스 0부터 시작 (헤더 제외했으므로)
+      if (data[i][0]) { // SerialNum이 있는 행만 처리
         const item = {
-          serialNum: data[i][0],
-          name: data[i][1],
-          description: data[i][2],
-          codeNum: data[i][3],
-          costB2B: data[i][4],
-          costB2C: data[i][5],
-          stockNum: data[i][6],
-          shortageNum: data[i][7],   // ✅ NEW
-          isShortage: data[i][8]     // ✅ NEW
+          serialNum: data[i][0],  // A열
+          name: data[i][1],       // B열
+          description: data[i][2],// C열
+          codeNum: data[i][3],    // D열
+          costB2B: data[i][4],    // E열
+          costB2C: data[i][5],    // F열
+          stockNum: data[i][6],   // G열
+          shortageNum: data[i][7],// H열
+          isShortage: data[i][8]  // I열
         };
         items.push(item);
       }
@@ -169,22 +425,34 @@ function getAllItems() {
       items: items
     };
   } catch (error) {
+    Logger.log('getAllItems error: ' + error.toString());
     return {
       success: false,
-      message: '오류가 발생했습니다: ' + error.toString()
+      message: 'An error occurred:  ' + error.toString()
     };
   }
 }
 
-// Revision 정보 가져오기
+// Get latest revision
 function getLatestRevision() {
   try {
+
+    // ✅ Step 1: Check Cache (1 hour valid)
+    const cached = getCachedData(CACHE_KEYS.REVISION_INFO);
+    if (cached) {
+      Logger.log('✓ Revision info from cache');
+      return cached;
+    }
+
+    // ✅ Step 2: Cache Miss - Search in Sheet
+    Logger.log('✗ Cache miss - fetching Revision from DB');
+
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('RevisionHistory');
     
     if (!sheet) {
       return {
         success: false,
-        message: 'RevisionHistory 시트를 찾을 수 없습니다.'
+        message: 'RevisionHistory sheet not found.'
       };
     }
     
@@ -193,7 +461,7 @@ function getLatestRevision() {
     if (data.length <= 1) {
       return {
         success: false,
-        message: 'Revision 데이터가 없습니다.'
+        message: 'No revision data found.'
       };
     }
     
@@ -204,7 +472,7 @@ function getLatestRevision() {
     if (revisionCol === -1 || dateCol === -1) {
       return {
         success: false,
-        message: 'Revision 또는 Date 열을 찾을 수 없습니다.'
+        message: 'Revision or Date column not found.'
       };
     }
     
@@ -222,7 +490,7 @@ function getLatestRevision() {
     if (maxRevision === -1) {
       return {
         success: false,
-        message: '유효한 Revision 값을 찾을 수 없습니다.'
+        message: 'No valid revision value found.'
       };
     }
     
@@ -230,21 +498,28 @@ function getLatestRevision() {
       maxRevisionDate = Utilities.formatDate(maxRevisionDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     }
     
-    return {
+     const result = {
       success: true,
       revision: maxRevision,
       date: maxRevisionDate
     };
+    
+    // ✅ Step 3: Save Result to Cache (1 Hour)
+    setCachedData(CACHE_KEYS.REVISION_INFO, result, CACHE_DURATION.REVISION);
+    Logger.log('✓ Revision info cached for 1 hour');
+    
+    return result;
+
   } catch (error) {
-    Logger.log('Revision 조회 오류: ' + error.toString());
+    Logger.log('Revision query error: ' + error.toString());
     return {
       success: false,
-      message: '오류가 발생했습니다: ' + error.toString()
+      message: 'An error occurred: ' + error.toString()
     };
   }
 }
 
-// 전체 Revision History 가져오기
+// Get revision history
 function getRevisionHistory() {
   try {
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('RevisionHistory');
@@ -252,7 +527,7 @@ function getRevisionHistory() {
     if (!sheet) {
       return {
         success: false,
-        message: 'RevisionHistory 시트를 찾을 수 없습니다.'
+        message: 'RevisionHistory sheet not found.'
       };
     }
     
@@ -261,7 +536,7 @@ function getRevisionHistory() {
     if (data.length <= 1) {
       return {
         success: false,
-        message: 'Revision 데이터가 없습니다.'
+        message: 'No revision data found.'
       };
     }
     
@@ -280,7 +555,7 @@ function getRevisionHistory() {
     if (missingColumns.length > 0) {
       return {
         success: false,
-        message: '다음 열을 찾을 수 없습니다: ' + missingColumns.join(', ')
+        message: 'Cannot find columns: ' + missingColumns.join(', ')
       };
     }
     
@@ -309,35 +584,35 @@ function getRevisionHistory() {
       revisions: revisions
     };
   } catch (error) {
-    Logger.log('Revision History 조회 오류: ' + error.toString());
+    Logger.log('Revision History query error: ' + error.toString());
     return {
       success: false,
-      message: '오류가 발생했습니다: ' + error.toString()
+      message: 'An error occurred:  ' + error.toString()
     };
   }
 }
 
-// 신규 주문서 번호 가져오기
+// Get new order index
 function getNewOrderIndex(orderDate) {
   try {
-    // ✅ 입력값 검증 추가
+    //  Input validation
     if (!orderDate) {
       return {
         success: false,
-        message: '주문 날짜가 제공되지 않았습니다.'
+        message: 'Order date not provided.'
       };
     }
     
-    // 날짜 형식 검증 (YYYYMMDD, 8자리 숫자)
+    // Date format validation (YYYYMMDD, 8 digits)
     const dateStr = orderDate.toString();
     if (dateStr.length !== 8 || isNaN(dateStr)) {
       return {
         success: false,
-        message: '올바르지 않은 날짜 형식입니다. YYYYMMDD 형식이어야 합니다. (입력값: ' + dateStr + ')'
+        message: 'Invalid date format. Must be YYYYMMDD format. (Input: ' + dateStr + ')'
       };
     }
     
-    // 날짜 유효성 검증
+    // Date validity check
     const year = parseInt(dateStr.substring(0, 4));
     const month = parseInt(dateStr.substring(4, 6));
     const day = parseInt(dateStr.substring(6, 8));
@@ -345,31 +620,30 @@ function getNewOrderIndex(orderDate) {
     if (year < 2000 || year > 2100) {
       return {
         success: false,
-        message: '유효하지 않은 연도입니다: ' + year
+        message: 'Invalid year: ' + year
       };
     }
     
     if (month < 1 || month > 12) {
       return {
         success: false,
-        message: '유효하지 않은 월입니다: ' + month
+        message: 'Invalid month: ' + month
       };
     }
     
     if (day < 1 || day > 31) {
       return {
         success: false,
-        message: '유효하지 않은 일입니다: ' + day
+        message: 'Invalid day: ' + day
       };
     }
     
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     
-    // ✅ 스프레드시트 접근 검증
     if (!ss) {
       return {
         success: false,
-        message: '스프레드시트에 접근할 수 없습니다. ID를 확인해주세요.'
+        message: 'Cannot access spreadsheet. Please check ID.'
       };
     }
     
@@ -378,7 +652,6 @@ function getNewOrderIndex(orderDate) {
     if (!sheet) {
       Logger.log('PurchaseOrder sheet does not exist, attempting to create...');
       
-      // ✅ Updated: Added PayType and IsCanceled columns
       try {
         sheet = ss.insertSheet(PURCHASE_ORDER_SHEET_NAME);
         sheet.appendRow([
@@ -392,9 +665,9 @@ function getNewOrderIndex(orderDate) {
           'Order_CostB2C', 
           'Order_IsB2B', 
           'Order_Cnt',
-          'PayType',           // ✅ NEW
+          'PayType',
           'Order_TotalCost',
-          'IsCanceled'         // ✅ NEW
+          'IsCanceled'
         ]);
         Logger.log('PurchaseOrder sheet created successfully.');
         
@@ -413,12 +686,12 @@ function getNewOrderIndex(orderDate) {
     
     const data = sheet.getDataRange().getValues();
     
-    // ✅ 데이터 없음 = 첫 주문
+    // Empty Data = First Order
     if (data.length <= 1) {
       return {
         success: true,
         orderIndex: 1,
-        message: '첫 번째 주문서입니다.'
+        message: 'First order.'
       };
     }
     
@@ -426,25 +699,25 @@ function getNewOrderIndex(orderDate) {
     const dateColIndex = headers.indexOf('Order_Date');
     const indexColIndex = headers.indexOf('Order_Index');
     
-    // ✅ 컬럼 존재 검증
+    // Validate required columns
     if (dateColIndex === -1) {
       return {
         success: false,
-        message: 'Order_Date 열을 찾을 수 없습니다. 시트 구조를 확인해주세요.'
+        message: 'Cannot find Order_Date column. Please check sheet structure.'
       };
     }
     
     if (indexColIndex === -1) {
       return {
         success: false,
-        message: 'Order_Index 열을 찾을 수 없습니다. 시트 구조를 확인해주세요.'
+        message: 'Cannot find Order_Index column. Please check sheet structure.'
       };
     }
     
     let maxIndex = 0;
     let sameDataCount = 0;
     
-    // 같은 날짜의 최대 인덱스 찾기
+    // Find max index for same date
     for (let i = 1; i < data.length; i++) {
       const rowDate = data[i][dateColIndex];
       const rowIndex = parseInt(data[i][indexColIndex]) || 0;
@@ -459,15 +732,15 @@ function getNewOrderIndex(orderDate) {
     
     const newIndex = maxIndex + 1;
     
-    // ✅ 인덱스 범위 검증 (9999까지만)
+    // Validate index range (max 9999)
     if (newIndex > 9999) {
       return {
         success: false,
-        message: '하루 최대 주문서 개수(9999)를 초과했습니다.'
+        message: 'Exceeded maximum orders per day (9999).'
       };
     }
     
-    // ✅ 기존 주문서 개수 = 마지막 주문서 번호
+    // Num of Orders = Last Order Index.
     const existingOrderCount = maxIndex;
 
     Logger.log(`날짜 ${orderDate}의 주문서: 기존 ${existingOrderCount}개, 새 인덱스: ${newIndex}`);
@@ -479,7 +752,7 @@ function getNewOrderIndex(orderDate) {
     };
     
   } catch (error) {
-    // ✅ 자세한 에러 로깅
+    // Detailed error logging
     const errorDetails = {
       message: error.message,
       stack: error.stack,
@@ -487,16 +760,16 @@ function getNewOrderIndex(orderDate) {
       timestamp: new Date().toISOString()
     };
     
-    Logger.log('신규 주문서 번호 조회 오류: ' + JSON.stringify(errorDetails, null, 2));
+    Logger.log('New order index query error: ' + JSON.stringify(errorDetails, null, 2));
     
     return {
       success: false,
-      message: '오류가 발생했습니다: ' + error.message
+      message: 'An error occurred: ' + error.message
     };
   }
 }
 
-// 주문서 조회
+// Get order data
 function getOrderData(orderDate, orderIndex) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -568,9 +841,9 @@ function getOrderData(orderDate, orderIndex) {
           costB2C: data[i][colIndices['Order_CostB2C']],
           isB2B: data[i][colIndices['Order_IsB2B']],
           cnt: data[i][colIndices['Order_Cnt']],
-          payType: data[i][colIndices['PayType']] || '-',              // ✅ NEW
+          payType: data[i][colIndices['PayType']] || '-',
           totalCost: data[i][colIndices['Order_TotalCost']],
-          isCanceled: isCanceled           // ✅ NEW
+          isCanceled: isCanceled
         });
       }
     }
@@ -596,7 +869,7 @@ function getOrderData(orderDate, orderIndex) {
   }
 }
 
-// 주문 저장
+// Save order
 function saveOrder(orderData) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -681,7 +954,7 @@ function saveOrder(orderData) {
           item.costB2C || 0,
           item.isB2B ? 1 : 0,
           item.cnt,
-          payType,           // ✅ NEW
+          payType,
           totalCost,
           ''                 // ✅ NEW: IsCanceled (empty = not canceled)
         ]);
@@ -692,9 +965,14 @@ function saveOrder(orderData) {
         itemSheet.getRange(stock.rowIndex + 1, stockNumColIndex + 1).setValue(stock.newStock);
       });
       
-      // ✅ 3단계: 로그 기록 (선택사항)
       Logger.log(`Order completed - Number: ${orderSerialNumber}, Items: ${orderData.items.length}`);
       
+      // ✅ NEW: Invalidate caches after order creation
+      invalidateCaches([
+        CACHE_KEYS.DASHBOARD_INFO,
+        CACHE_KEYS.INVENTORY_STATUS
+      ]);
+
       return {
         success: true,
         message: 'Order saved successfully.',
@@ -717,7 +995,7 @@ function saveOrder(orderData) {
   }
 }
 
-// ===== NEW FUNCTION: Cancel Order =====
+// Cancel order
 function cancelOrder(orderSerialNumber) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -794,6 +1072,12 @@ function cancelOrder(orderSerialNumber) {
     
     Logger.log(`Order canceled - Serial: ${orderSerialNumber}, Rows: ${rowsToCancel.length}`);
     
+    // ✅ NEW: Invalidate caches after order cancellation
+    invalidateCaches([
+      CACHE_KEYS.DASHBOARD_INFO,
+      CACHE_KEYS.INVENTORY_STATUS
+    ]);
+
     return {
       success: true,
       message: 'Order canceled successfully.',
@@ -810,7 +1094,7 @@ function cancelOrder(orderSerialNumber) {
   }
 }
 
-// 특정 날짜의 모든 주문서 목록 가져오기
+//  Get order list by date
 function getOrderListByDate(orderDate) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -881,7 +1165,6 @@ function getOrderListByDate(orderDate) {
 }
 
 // ===== Memo Functions =====
-
 const MEMO_SHEET_NAME = 'Memo';
 
 // Get latest 10 memos
@@ -1112,79 +1395,55 @@ function deleteMemo(rowNumber) {
 // Get today's dashboard info (order count and stock status)
 function getDashboardInfo() {
   try {
+    // ✅ NEW: Try cache first
+    const cached = getCachedData(CACHE_KEYS.DASHBOARD_INFO);
+    if (cached) {
+      return cached;
+    }
+
+    // ✅ Cache miss - fetch from DB
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     const todayDate = parseInt(year + month + day);
     
-    // Get today's order count
-    let orderCount = 0;
+    // Get today's order count and stock status
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const orderSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    const dashboardSheet = ss.getSheetByName('Dashboard');
+
+    if (!dashboardSheet) {
+      return {
+        success: false,
+        message: 'Dashboard sheet not found. Please create it with formulas.'
+      };
+    }
+
+    // ✅ 개선점 1: Dashboard B5에서 오늘 주문 수를 바로 읽음 (PurchaseOrder 전체 스캔 X)
+    const orderCount = dashboardSheet.getRange('B5').getValue() || 0;
     
-    if (orderSheet) {
-      const orderData = orderSheet.getDataRange().getValues();
-      const headers = orderData[0];
-      const dateColIndex = headers.indexOf('Order_Date');
-      const indexColIndex = headers.indexOf('Order_Index');
-      
-      if (dateColIndex !== -1 && indexColIndex !== -1) {
-        const orderIndexSet = new Set();
-        
-        for (let i = 1; i < orderData.length; i++) {
-          const rowDate = orderData[i][dateColIndex];
-          const rowIndex = orderData[i][indexColIndex];
-          
-          if (rowDate && parseInt(rowDate.toString()) === todayDate) {
-            orderIndexSet.add(parseInt(rowIndex));
-          }
-        }
-        
-        orderCount = orderIndexSet.size;
-      }
+    // ✅ 개선점 2: Dashboard B2~B4에서 재고 상태를 바로 읽음 (ItemInfo 전체 스캔 X)
+    const outCount = dashboardSheet.getRange('B2').getValue() || 0;
+    const lowCount = dashboardSheet.getRange('B3').getValue() || 0;
+    
+    let stockStatus = 2; // Default: 양호
+    if (outCount > 0) {
+      stockStatus = 0; // 경고 (품절 있음)
+    } else if (lowCount > 0) {
+      stockStatus = 1; // 관심 (부족 있음)
     }
     
-    // Get stock status
-    let stockStatus = 2; // Default: 양호 (Good)
-    const itemSheet = ss.getSheetByName(SHEET_NAME);
-    
-    if (itemSheet) {
-      const itemData = itemSheet.getDataRange().getValues();
-      const headers = itemData[0];
-      const isShortageColIndex = headers.indexOf('IsShortage');
-      
-      if (isShortageColIndex !== -1) {
-        let hasOutOfStock = false;
-        let hasShortage = false;
-        
-        for (let i = 1; i < itemData.length; i++) {
-          const isShortage = itemData[i][isShortageColIndex];
-          
-          if (isShortage === 0) {
-            hasOutOfStock = true;
-            break; // 품절이 하나라도 있으면 경고
-          } else if (isShortage === 1) {
-            hasShortage = true;
-          }
-        }
-        
-        if (hasOutOfStock) {
-          stockStatus = 0; // 경고 (Critical)
-        } else if (hasShortage) {
-          stockStatus = 1; // 관심 (Warning)
-        } else {
-          stockStatus = 2; // 양호 (Good)
-        }
-      }
-    }
-    
-    return {
+    const result = {
       success: true,
-      todayDate: `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`,
+      todayDate: `${year}년 ${month}월 ${day}일`,
       orderCount: orderCount,
-      stockStatus: stockStatus // 0: 경고(품절), 1: 관심(부족), 2: 양호
+      stockStatus: stockStatus
     };
+    
+    // ✅ NEW: Save to cache (10 minutes)
+    setCachedData(CACHE_KEYS.DASHBOARD_INFO, result, CACHE_DURATION.DASHBOARD);
+    
+    return result;
     
   } catch (error) {
     Logger.log('Error getting dashboard info: ' + error.toString());
@@ -1321,6 +1580,13 @@ function getOrdersByDateRange(startDate, endDate) {
 
 function getInventoryStatusCountsFromSheet() {
   try {
+    // ✅ NEW: Try cache first
+    const cached = getCachedData(CACHE_KEYS.INVENTORY_STATUS);
+    if (cached) {
+      return cached;
+    }
+    
+    // ✅ Cache miss - fetch from sheet
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let dashboardSheet = ss.getSheetByName('Dashboard');
 
@@ -1338,12 +1604,18 @@ function getInventoryStatusCountsFromSheet() {
 
     Logger.log(`Inventory counts from sheet - Out: ${outCount}, Low: ${lowCount}, Normal: ${normalCount}`);
 
-    return {
+    const result = {
       success: true,
       outCount: outCount,
       lowCount: lowCount,
       normalCount: normalCount
     };
+    
+    // ✅ NEW: Save to cache (10 minutes)
+    setCachedData(CACHE_KEYS.INVENTORY_STATUS, result, CACHE_DURATION.INVENTORY);
+    
+    return result;
+
   } catch (error) {
     Logger.log('Error getting inventory counts from sheet: ' + error.toString());
     return {
