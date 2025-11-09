@@ -1,10 +1,14 @@
 // 구글시트 설정 값 가져오기.
 // Code.gs
+
+const RECEIPT_TEMPLATE = 'ReceiptTemplate_2'; // 'ReceiptTemplate' 또는 'ReceiptTemplate_2'
+
 function getConfig() {
   const scriptProperties = PropertiesService.getScriptProperties();
   return {
     SPREADSHEET_ID: scriptProperties.getProperty('SPREADSHEET_ID'),
-    GUIDE_IMAGE_ID: scriptProperties.getProperty('GUIDE_IMAGE_ID')
+    GUIDE_IMAGE_ID: scriptProperties.getProperty('GUIDE_IMAGE_ID'),
+    FOLDER_ID: scriptProperties.getProperty('FOLDER_ID')
   };
 }
 
@@ -1521,10 +1525,10 @@ function getInventoryStatusCountsFromSheet() {
 function generateReceiptPDF(orderSerialNumber) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const templateSheet = ss.getSheetByName('ReceiptTemplate');
+    const templateSheet = ss.getSheetByName(RECEIPT_TEMPLATE);
     
     if (!templateSheet) {
-      return { success: false, message: 'ReceiptTemplate sheet not found.' };
+      return { success: false, message: `${RECEIPT_TEMPLATE} sheet not found.`};
     }
     
     // Get order data
@@ -1558,16 +1562,43 @@ function generateReceiptPDF(orderSerialNumber) {
       return { success: false, message: 'No orders found for this serial number.' };
     }
     
-    // Split into pages (14 items per page)
-    const itemsPerPage = 14;
+    // Choose template-specific settings
+    let itemsPerPage, startRow, endRow, exportRange, portrait;
+    
+    if (RECEIPT_TEMPLATE === 'ReceiptTemplate_2') {
+      itemsPerPage = 11;
+      startRow = 9;
+      endRow = 19;
+      exportRange = 'A1:AJ44';
+      portrait = true;
+    } else {
+      itemsPerPage = 14;
+      startRow = 14;
+      endRow = 27;
+      exportRange = 'A1:Y30';
+      portrait = false;
+    }
+
+    // Split into pages
     const pages = [];
     for (let i = 0; i < orders.length; i += itemsPerPage) {
       pages.push(orders.slice(i, i + itemsPerPage));
     }
     
     const pdfFiles = [];
-    const folderId = '14Fp2i5BUj36vKFolDFdgbYC_B2pZDVh_'; // Your folder ID
+    const folderId = config.FOLDER_ID;
+    if (!folderId) {
+      return { success: false, message: 'FOLDER_ID is not set in script properties.' };
+    }
     const folder = DriveApp.getFolderById(folderId);
+    
+    // Format date
+    const dateStr = orders[0].date.toString();
+    const year = dateStr.substring(0, 4);
+    const month = dateStr.substring(4, 6);
+    const day = dateStr.substring(6, 8);
+    const formattedDateFull = `${year}.${month}.${day}`;
+    const formattedDateShort = `${month}.${day}`;
     
     // Generate PDF for each page
     for (let pageNum = 0; pageNum < pages.length; pageNum++) {
@@ -1578,74 +1609,111 @@ function generateReceiptPDF(orderSerialNumber) {
       const tempSheetId = tempSheet.getSheetId();
       tempSheet.setName('Temp_' + Date.now() + '_' + pageNum);
       
-      // Format date YYYY.MM.DD
-      const dateStr = orders[0].date.toString();
-      const year = dateStr.substring(0, 4);
-      const month = dateStr.substring(4, 6);
-      const day = dateStr.substring(6, 8);
-      const formattedDateFull = `${year}.${month}.${day}`;
-      const formattedDateShort = `${month}.${day}`;
-      
-      // Fill header
-      tempSheet.getRange('B11').setValue(formattedDateFull);
-      
-      // Calculate total for this page
-      let pageTotal = 0;
-      pageItems.forEach(item => {
-        pageTotal += item.totalCost;
-      });
-      tempSheet.getRange('F11').setValue(pageTotal);
-      
-      // Fill items (rows 14-27)
-      let row = 14;
-      pageItems.forEach(item => {
-        // Date (B column)
-        tempSheet.getRange(row, 2).setValue(formattedDateShort); // B14-B27
+      if (RECEIPT_TEMPLATE === 'ReceiptTemplate_2') {
+        // ===== ReceiptTemplate_2 Logic =====
         
-        // Item name + description (D column)
-        const itemText = item.description 
-          ? `${item.name} (${item.description})` 
-          : item.name;
-        tempSheet.getRange(row, 4).setValue(itemText); // D14-D27
+        // Q2: Full date (YYYY.MM.DD)
+        tempSheet.getRange('Q2').setValue(formattedDateFull);
         
-        // Quantity (G column)
-        tempSheet.getRange(row, 7).setValue(item.cnt); // G14-G27
+        // AH2: Page number (1/2, 2/2, etc.)
+        tempSheet.getRange('AH2').setValue(`${pageNum + 1}/${pages.length}`);
         
-        // Unit price (I column)
-        const unitPrice = item.isB2B === 1 ? item.costB2B : item.costB2C;
-        tempSheet.getRange(row, 9).setValue(unitPrice); // I14-I27
+        // Calculate total for this page
+        let pageTotal = 0;
+        pageItems.forEach(item => {
+          pageTotal += item.totalCost;
+        });
         
-        // Total price (K column)
-        tempSheet.getRange(row, 11).setValue(item.totalCost); // K14-K27
+        // Fill items (rows 9-19)
+        let row = startRow;
+        pageItems.forEach(item => {
+          // B: Date (MM.DD)
+          tempSheet.getRange(row, 2).setValue(formattedDateShort);
+          
+          // D: Item name + description
+          const itemText = item.description 
+            ? `${item.name} (${item.description})` 
+            : item.name;
+          tempSheet.getRange(row, 4).setValue(itemText);
+          
+          // Q: Quantity
+          tempSheet.getRange(row, 17).setValue(item.cnt);
+          
+          // T: Unit price (excluding VAT - 90% of original price)
+          const originalPrice = item.isB2B === 1 ? item.costB2B : item.costB2C;
+          const unitPriceExVAT = Math.round(originalPrice * 0.9);
+          tempSheet.getRange(row, 20).setValue(unitPriceExVAT);
+          
+          // AB: VAT (10% of original price)
+          const vat = Math.round(originalPrice * 0.1);
+          tempSheet.getRange(row, 28).setValue(vat);
+          
+          // X: Total (original price * quantity)
+          const totalPrice = originalPrice * item.cnt;
+          tempSheet.getRange(row, 24).setValue(totalPrice);
+          
+          row++;
+        });
         
-        row++;
-      });
-      
-      // Total at bottom (K28)
-      tempSheet.getRange('K28').setValue(pageTotal);
+        // D20: Total amount (sum of all items)
+        tempSheet.getRange('D20').setValue(pageTotal);
+        
+      } else {
+        // ===== ReceiptTemplate Logic (기존 코드) =====
+        
+        // B11: Full date
+        tempSheet.getRange('B11').setValue(formattedDateFull);
+        
+        // Calculate total for this page
+        let pageTotal = 0;
+        pageItems.forEach(item => {
+          pageTotal += item.totalCost;
+        });
+        tempSheet.getRange('F11').setValue(pageTotal);
+        
+        // Fill items (rows 14-27)
+        let row = startRow;
+        pageItems.forEach(item => {
+          // Date (B column)
+          tempSheet.getRange(row, 2).setValue(formattedDateShort);
+          
+          // Item name + description (D column)
+          const itemText = item.description 
+            ? `${item.name} (${item.description})` 
+            : item.name;
+          tempSheet.getRange(row, 4).setValue(itemText);
+          
+          // Quantity (G column)
+          tempSheet.getRange(row, 7).setValue(item.cnt);
+          
+          // Unit price (I column)
+          const unitPrice = item.isB2B === 1 ? item.costB2B : item.costB2C;
+          tempSheet.getRange(row, 9).setValue(unitPrice);
+          
+          // Total price (K column)
+          tempSheet.getRange(row, 11).setValue(item.totalCost);
+          
+          row++;
+        });
+        
+        // Total at bottom (K28)
+        tempSheet.getRange('K28').setValue(pageTotal);
+      }
       
       SpreadsheetApp.flush();
       
       // Export to PDF
-      const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=pdf&gid=${tempSheetId}&portrait=false&fitw=true&range=A1:Y30&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED&attachment=false&top_margin=0.2&bottom_margin=0.2&left_margin=0.2&right_margin=0.2`;
-      // portrait : false(가로모드), true(세로모드)
-      // fitw : true(폭맞춤), false(실제크기)
-      // range : 출력할 범위 지정
-      // gridlines : false(격자선없음), true(격자선있음)
-      // printtitle : false(제목없음), true(제목있음)
-      // sheetnames : false(시트이름없음), true(시트이름있음)
-      // pagenum : UNDEFINED(없음), CENTER(가운데), RIGHT(오른쪽)
-      // attachment : false(브라우저내부표시), true(다운로드)
-      // margins : 단위 inch
-
+      const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=pdf&gid=${tempSheetId}&portrait=${portrait}&fitw=true&range=${exportRange}&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED&attachment=false&top_margin=0.2&bottom_margin=0.2&left_margin=0.2&right_margin=0.2`;
+      
       const token = ScriptApp.getOAuthToken();
       const response = UrlFetchApp.fetch(url, {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       
       // File name
+      const filePrefix = RECEIPT_TEMPLATE === 'ReceiptTemplate_2' ? '거래명세표' : '영수증';
       const pageSuffix = pages.length > 1 ? `_${pageNum + 1}` : '';
-      const fileName = `영수증_${orderSerialNumber}${pageSuffix}.pdf`;
+      const fileName = `${filePrefix}_${orderSerialNumber}${pageSuffix}.pdf`;
       const pdfBlob = response.getBlob().setName(fileName);
       
       // Save to Drive
@@ -1665,7 +1733,7 @@ function generateReceiptPDF(orderSerialNumber) {
       }
     }
     
-    Logger.log(`Generated ${pdfFiles.length} PDF(s) for order ${orderSerialNumber}`);
+    Logger.log(`Generated ${pdfFiles.length} PDF(s) for order ${orderSerialNumber} using ${RECEIPT_TEMPLATE}`);
     
     return {
       success: true,
