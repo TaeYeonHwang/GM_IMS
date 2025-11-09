@@ -1,0 +1,55 @@
+<div id="customerScreen" class="screen">
+  <div class="card">
+    <button class="btn btn-home" onclick="showMain()">← 홈으로</button>
+    
+    <div class="header">
+      <h1><span class="logo">👥</span> 고객 관리</h1>
+      <p class="subtitle">거래처 매출 및 미수금 현황</p>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="customer-summary-section">
+      <div class="customer-summary-grid">
+        <div class="customer-summary-card">
+          <div class="customer-summary-content">
+            <div class="customer-summary-label">총 매출</div>
+            <div class="customer-summary-value" id="totalSalesPrice">-</div>
+          </div>
+        </div>
+        
+        <div class="customer-summary-card">
+          <div class="customer-summary-content">
+            <div class="customer-summary-label">총 수금</div>
+            <div class="customer-summary-value" id="totalReceivedPrice">-</div>
+          </div>
+        </div>
+        
+        <div class="customer-summary-card">
+          <div class="customer-summary-content">
+            <div class="customer-summary-label">총 미수금</div>
+            <div class="customer-summary-value" id="totalNonReceivedPrice">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Section -->
+    <div class="customer-search-section">
+      <label class="customer-search-label">🔍 고객 검색</label>
+      <input 
+        type="text" 
+        id="customerSearchInput" 
+        class="customer-search-input"
+        placeholder="고객명으로 검색..." 
+        oninput="handleCustomerSearch()"
+      >
+      <div id="customerSearchInfo" class="customer-search-info">
+        전체 <strong id="customerTotalCount">-</strong>개
+      </div>
+    </div>
+
+    <!-- Customer List -->
+    <div id="customerListContainer"></div>
+
+  </div>
+</div>

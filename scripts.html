@@ -145,7 +145,7 @@
   }
 
   function hideAllScreens() {
-    ['mainScreen', 'inventoryMenuScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen', 'memoScreen'].forEach(id => {
+    ['mainScreen', 'inventoryMenuScreen', 'listScreen', 'guideScreen', 'revisionHistoryScreen', 'orderMainScreen', 'orderFormScreen', 'orderViewScreen', 'memoScreen', 'customerScreen'].forEach(id => {
       document.getElementById(id).style.display = 'none';
       document.getElementById(id).classList.remove('active');
     });
@@ -2617,5 +2617,183 @@
       })
       .generateReceiptPDF(orderSerialNumber);
   }
+
+  // Customer Tab Functions
+  let allCustomers = [];
+  let customerSearchText = '';
+  let customerSearchTimeout = null;
+
+  // Show customer screen
+  function showCustomer() {
+    hideAllScreens();
+    const s = document.getElementById('customerScreen');
+    s.style.display = 'block';
+    s.classList.add('active');
+    stopOrderQRCamera();
+    
+    // Reset search
+    customerSearchText = '';
+    document.getElementById('customerSearchInput').value = '';
+    document.getElementById('customerSearchInfo').innerHTML = '<div class="loading-dot">로딩 중...</div>';
+    
+    loadAllCustomers();
+
+    navigateToScreen('customerScreen');
+  }
+
+  // Load all customers
+  function loadAllCustomers() {
+    document.getElementById('customerListContainer').innerHTML = '<div class="loading"><div class="spinner"></div><div>고객 정보 로딩 중...</div></div>';
+    
+    // ✅ Summary cards도 로딩 상태로 초기화
+    document.getElementById('totalSalesPrice').textContent = '-';
+    document.getElementById('totalReceivedPrice').textContent = '-';
+    document.getElementById('totalNonReceivedPrice').textContent = '-';
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          allCustomers = result.customers;
+          customerSearchText = '';
+          
+          // Display all customers
+          renderCustomers(allCustomers);
+          updateCustomerSearchInfo(allCustomers.length, allCustomers.length);
+          updateCustomerSummary(allCustomers);
+        } else {
+          document.getElementById('customerListContainer').innerHTML = '<div class="alert alert-error">' + result.message + '</div>';
+        }
+      })
+      .withFailureHandler(function(error) {
+        document.getElementById('customerListContainer').innerHTML = '<div class="alert alert-error">고객 정보 로드 오류: ' + error + '</div>';
+      })
+      .getAllCustomers();
+  }
+
+  // Handle customer search with debounce
+  function handleCustomerSearch() {
+    if (customerSearchTimeout) {
+      clearTimeout(customerSearchTimeout);
+    }
+    
+    customerSearchTimeout = setTimeout(() => {
+      executeCustomerSearch();
+    }, 300);
+  }
+
+  // Execute customer search
+  function executeCustomerSearch() {
+    const searchInput = document.getElementById('customerSearchInput');
+    customerSearchText = searchInput.value.trim().toLowerCase();
+    
+    if (customerSearchText === '') {
+      renderCustomers(allCustomers);
+      updateCustomerSearchInfo(allCustomers.length, allCustomers.length);
+    } else {
+      const filtered = allCustomers.filter(customer => 
+        (customer.companyName && customer.companyName.toLowerCase().includes(customerSearchText))
+      );
+      
+      renderCustomers(filtered);
+      updateCustomerSearchInfo(filtered.length, allCustomers.length);
+    }
+  }
+
+  // Render customers
+  function renderCustomers(customers) {
+    const container = document.getElementById('customerListContainer');
+    
+    if (customers.length === 0) {
+      container.innerHTML = '<div class="alert alert-info">검색 결과가 없습니다.</div>';
+      return;
+    }
+    
+    let html = '<div class="customer-list">';
+    
+    customers.forEach(function(customer) {
+      const nonReceivedClass = customer.nonReceivedPrice > 0 ? 'has-debt' : 'no-debt';
+      
+      html += '<div class="customer-card ' + nonReceivedClass + '">';
+      
+      // Header
+      html += '<div class="customer-card-header">';
+      html += '<h4 class="customer-name">' + (customer.companyName || '-') + '</h4>';
+      if (customer.nonReceivedPrice > 0) {
+        html += '<span class="customer-badge badge-warning">미수금 있음</span>';
+      } else {
+        html += '<span class="customer-badge badge-success">정산 완료</span>';
+      }
+      html += '</div>';
+      
+      // Financial Info Grid
+      html += '<div class="customer-info-grid">';
+      
+      html += '<div class="customer-info-item">';
+      html += '<div class="customer-info-label">매출</div>';
+      html += '<div class="customer-info-value">' + (customer.salesPrice || 0).toLocaleString() + '원</div>';
+      html += '</div>';
+      
+      html += '<div class="customer-info-item">';
+      html += '<div class="customer-info-label">수금</div>';
+      html += '<div class="customer-info-value">' + (customer.receivedPrice || 0).toLocaleString() + '원</div>';
+      html += '</div>';
+      
+      html += '<div class="customer-info-item">';
+      html += '<div class="customer-info-label">⚠️ 미수금</div>';
+      if (customer.nonReceivedPrice > 0) {
+        html += '<div class="customer-info-value customer-debt">' + customer.nonReceivedPrice.toLocaleString() + '원</div>';
+      } else {
+        html += '<div class="customer-info-value">-</div>';
+      }
+      html += '</div>';
+      
+      html += '</div>';
+      
+      // Description
+      if (customer.description) {
+        html += '<div class="customer-description">';
+        html += '<strong>📝 비고:</strong> ' + customer.description;
+        html += '</div>';
+      }
+      
+      html += '</div>';
+    });
+    
+    html += '</div>';
+    
+    container.innerHTML = html;
+  }
+
+  // Update customer search info
+  function updateCustomerSearchInfo(displayCount, totalCount) {
+    const infoDiv = document.getElementById('customerSearchInfo');
+    
+    if (!infoDiv) return;  // ✅ 요소가 없으면 리턴
+
+    if (customerSearchText === '') {
+      infoDiv.innerHTML = '전체 <strong>' + totalCount + '</strong>개';
+    } else {
+      infoDiv.innerHTML = '검색 결과: <strong>' + displayCount + '</strong>개 / 전체 <strong>' + totalCount + '</strong>개';
+    }
+    
+  }
+
+  // Update summary cards
+  function updateCustomerSummary(customers) {
+    let totalSales = 0;
+    let totalReceived = 0;
+    let totalNonReceived = 0;
+    
+    customers.forEach(function(customer) {
+      totalSales += customer.salesPrice || 0;
+      totalReceived += customer.receivedPrice || 0;
+      totalNonReceived += customer.nonReceivedPrice || 0;
+    });
+    
+    document.getElementById('totalSalesPrice').textContent = totalSales.toLocaleString() + '원';
+    document.getElementById('totalReceivedPrice').textContent = totalReceived.toLocaleString() + '원';
+    document.getElementById('totalNonReceivedPrice').textContent = totalNonReceived.toLocaleString() + '원';
+  }
+
 
 </script>

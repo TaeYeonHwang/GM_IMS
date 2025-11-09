@@ -1580,6 +1580,224 @@
     border: 2px dashed #e8ecef;
   }
 
+  /* ====================================
+  Customer Management Styles
+  ==================================== */
+
+  .customer-summary-section {
+    background: white;
+    border-radius: 16px;
+    padding: clamp(20px, 3vw, 25px);
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 2px solid #e8ecef;
+  }
+
+  .customer-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: clamp(15px, 2.5vw, 20px);
+  }
+
+  .customer-summary-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: clamp(18px, 2.5vw, 22px);
+    background: #f8f9fa;
+    border-radius: 12px;
+    border-left: 5px solid #3498db;
+    transition: all 0.3s ease;
+  }
+
+  .customer-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .customer-summary-icon {
+    font-size: clamp(32px, 5vw, 40px);
+    flex-shrink: 0;
+  }
+
+  .customer-summary-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .customer-summary-label {
+    font-size: clamp(14px, 2vw, 16px);
+    color: #7f8c8d;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .customer-summary-value {
+    font-size: clamp(22px, 3.5vw, 28px);
+    color: #2c3e50;
+    font-weight: 700;
+  }
+
+  .customer-search-section {
+    background: white;
+    padding: clamp(20px, 3vw, 25px);
+    border-radius: 12px;
+    margin: clamp(15px, 2vw, 20px) 0;
+    border: 2px solid #e8ecef;
+  }
+
+  .customer-search-label {
+    font-size: clamp(18px, 2.5vw, 22px);
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .customer-search-input {
+    width: 100%;
+    padding: clamp(12px, 2vw, 15px);
+    border: 2px solid #e8ecef;
+    border-radius: 8px;
+    font-size: clamp(16px, 2.5vw, 18px);
+    transition: all 0.3s ease;
+  }
+
+  .customer-search-input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  }
+
+  .customer-search-info {
+    color: #7f8c8d;
+    font-size: clamp(14px, 2vw, 16px);
+    margin-top: 10px;
+    text-align: center;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+  }
+
+  .customer-search-info strong {
+    color: #3498db;
+    font-weight: 700;
+  }
+
+  .customer-list {
+    display: grid;
+    gap: 15px;
+    margin: clamp(15px, 2vw, 20px) 0;
+  }
+
+  .customer-card {
+    background: white;
+    padding: clamp(20px, 3vw, 25px);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 2px solid #e8ecef;
+    transition: all 0.3s ease;
+  }
+
+  .customer-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .customer-card.has-debt {
+    border-left: 5px solid #f39c12;
+  }
+
+  .customer-card.no-debt {
+    border-left: 5px solid #27ae60;
+  }
+
+  .customer-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .customer-name {
+    font-size: clamp(22px, 3.5vw, 28px);
+    color: #2c3e50;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .customer-badge {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: clamp(13px, 1.8vw, 15px);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .badge-warning {
+    background: #fff3cd;
+    color: #856404;
+  }
+
+  .badge-success {
+    background: #d4edda;
+    color: #155724;
+  }
+
+  .customer-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 15px;
+  }
+
+  .customer-info-item {
+    background: #f8f9fa;
+    padding: clamp(12px, 2vw, 15px);
+    border-radius: 8px;
+  }
+
+  .customer-info-label {
+    font-size: clamp(13px, 1.8vw, 15px);
+    color: #7f8c8d;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .customer-info-value {
+    font-size: clamp(18px, 2.8vw, 22px);
+    color: #2c3e50;
+    font-weight: 700;
+  }
+
+  .customer-debt {
+    color: #f39c12 !important;
+  }
+
+  .customer-description {
+    background: #f8f9fa;
+    padding: clamp(12px, 2vw, 15px);
+    border-radius: 8px;
+    font-size: clamp(14px, 2vw, 16px);
+    color: #2c3e50;
+    line-height: 1.6;
+  }
+
+  /* Feature card customer color */
+  .feature-card-customer .feature-card-line {
+    background: linear-gradient(90deg, #9b59b6, #8e44ad);
+  }
+
+  .feature-card-customer:hover .feature-icon-wrapper {
+    background: #f3e5f5;
+  }
+
+  .feature-card-customer .feature-arrow {
+    color: #9b59b6;
+  }
+
   /* Mobile Responsive */
   @media (max-width: 768px) {
     body {
@@ -1681,6 +1899,14 @@
     
     .latest-order-buttons .btn {
       width: 100%;
+    }
+
+    .customer-summary-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .customer-info-grid {
+      grid-template-columns: 1fr;
     }
   }
 

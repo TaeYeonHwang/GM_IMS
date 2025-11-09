@@ -1777,3 +1777,71 @@ function getTodayOrderCount() {
       };
     }
   }
+
+  // Get all customer data from Company sheet
+function getAllCustomers() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('Company');
+    
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'Company sheet not found.'
+      };
+    }
+    
+    const lastRow = sheet.getLastRow();
+    
+    if (lastRow < 2) {
+      return {
+        success: true,
+        customers: []
+      };
+    }
+    
+    // Read all data including headers
+    const allData = sheet.getDataRange().getValues();
+    const headers = allData[0];
+    
+    // Find column indices
+    const companyNameCol = headers.indexOf('CompanyName');
+    const salesPriceCol = headers.indexOf('SalesPrice');
+    const receivedPriceCol = headers.indexOf('ReceivedPrice');
+    const noneReceivedPriceCol = headers.indexOf('NoneReceivedPrice');  // ✅ 'None' 철자 수정
+    const descriptionCol = headers.indexOf('Description');
+    
+    // Validate columns exist
+    if (companyNameCol === -1 || salesPriceCol === -1 || receivedPriceCol === -1 || noneReceivedPriceCol === -1) {
+      return {
+        success: false,
+        message: 'Required columns not found in Company sheet.'
+      };
+    }
+    
+    const customers = [];
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][companyNameCol]) { // If CompanyName exists
+        customers.push({
+          companyName: allData[i][companyNameCol],
+          salesPrice: allData[i][salesPriceCol] || 0,
+          receivedPrice: allData[i][receivedPriceCol] || 0,
+          nonReceivedPrice: allData[i][noneReceivedPriceCol] || 0,  // ✅ 여기도 수정
+          description: allData[i][descriptionCol] || ''
+        });
+      }
+    }
+    
+    return {
+      success: true,
+      customers: customers
+    };
+    
+  } catch (error) {
+    Logger.log('getAllCustomers error: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred: ' + error.toString()
+    };
+  }
+}
