@@ -22,7 +22,7 @@
         </div>
       </div>
 
-      <!-- ✅ NEW: 결제 타입 선택 -->
+      <!-- 결제 타입 선택 -->
       <div class="order-type-selector">
         <label class="order-section-label">결제 방법</label>
         <div class="radio-group">
@@ -42,10 +42,22 @@
       <div class="search-section">
         <label class="order-section-label">품목 검색</label>
         <div class="input-group" style="margin-top: 15px;">
-          <input type="text" id="orderSearchInput" style="font-size:40pt" placeholder="코드 번호를 입력하세요" onkeypress="handleOrderSearchEnter(event)">
+          <!-- inputmode="none"  -->
+          <input
+            type="text" 
+            id="orderSearchInput" 
+            style="font-size:40pt" 
+            placeholder="코드 번호를 입력하세요" 
+            onkeypress="handleOrderSearchEnter(event)" 
+            inputmode="none"
+          >
         </div>
         <div class="search-buttons">
           <button class="btn btn-primary btn-small" onclick="searchItemForOrder()">검색</button>
+          <!-- ✅ NEW: 수동 입력 버튼 -->
+          <button class="btn btn-secondary btn-small" onclick="enableKeyboardInput()">
+            ⌨️ 키보드 활성화
+          </button>
           <button class="btn btn-primary btn-small" onclick="toggleOrderQRScanner()">
             <span id="orderQRBtnText">QR 스캔</span>
           </button>

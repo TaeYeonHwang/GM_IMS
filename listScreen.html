@@ -1,10 +1,6 @@
 <div id="listScreen" class="screen">
   <div class="card">
     <button class="btn btn-home" onclick="showInventoryMenu()">← 재고 관리로</button>
-    <button class="btn btn-sheet" onclick="window.open('https://docs.google.com/spreadsheets/d/1ssyDFI2SaisK_X9kpi_BFunavc-hcK_9ooGAuEWr-iE/edit#gid=0', '_blank')" style="margin-bottom: 20px;">
-      <span style="font-size: 45px;">📑 공유 파일 링크 접속</span>
-      <span class="btn-sheet-subtitle">(구글 스프레드 시트로 이동)</span>
-    </button>
     <div class="header">
       <h1><span class="logo">📋</span> 재고 조회</h1>
     </div>
@@ -35,7 +31,7 @@
       <button class="btn btn-primary btn-small" id="inventoryQRCaptureBtn" onclick="captureInventoryQR()" style="display:none;">📸 QR 캡처</button>
       <canvas id="inventoryQRCanvas" style="display:none;"></canvas>
       
-      <!-- ✅ NEW: 검색 결과 카운트 -->
+      <!-- 검색 결과 카운트 -->
       <div id="inventorySearchInfo" class="inventory-search-info">
         전체 <strong id="inventoryTotalCount">-</strong>개
       </div>

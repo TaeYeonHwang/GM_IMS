@@ -5,7 +5,6 @@
       <h1><span class="logo">📦</span> 재고 관리</h1>
     </div>
 
-    <!-- ✅ NEW: Inventory Status Dashboard -->
     <div class="inventory-status-section">
       <h3 style="font-size: clamp(20px, 3vw, 24px); color: #2c3e50; margin-bottom: 15px; font-weight: 600;">
         재고 현황
@@ -37,13 +36,19 @@
       </div>
     </div>
 
-    <!-- ✅ Changed: 하나의 버튼으로 통합 -->
     <button class="btn btn-primary btn-action-large" onclick="showInventoryList()">
       재고 조회
     </button>
 
-    <button class="btn btn-primary btn-action-large">
-      품절 및 임박 재고 조회 (구현 예정)
+    <button class="btn btn-primary btn-action-large" onclick="showShortageInventory()">
+      품절 및 임박 재고 조회
     </button>
+
+    <!-- 공유 파일 링크 버튼 추가  -->
+    <button class="btn btn-sheet" onclick="window.open('https://docs.google.com/spreadsheets/d/1ssyDFI2SaisK_X9kpi_BFunavc-hcK_9ooGAuEWr-iE/edit#gid=0', '_blank')" style="margin-top: 20px;">
+      <span style="font-size: 30px;">📑 공유 파일 링크 접속</span>
+      <span class="btn-sheet-subtitle">(구글 스프레드 시트로 이동)</span>
+    </button>
+
   </div>
 </div>

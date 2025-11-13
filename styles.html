@@ -1910,6 +1910,76 @@
     }
   }
 
+  /* Password Modal */
+  .pwd-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  }
+
+  .pwd-box {
+    background: white;
+    border-radius: 16px;
+    padding: 30px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+
+  .pwd-box h3 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 24px;
+  }
+
+  .pwd-box input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e8ecef;
+    border-radius: 8px;
+    font-size: 16px;
+    margin-bottom: 15px;
+  }
+
+  .pwd-box input:focus {
+    outline: none;
+    border-color: #3498db;
+  }
+
+  .pwd-btns {
+    display: flex;
+    gap: 10px;
+  }
+
+  .pwd-btns button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pwd-ok {
+    background: #3498db;
+    color: white;
+  }
+
+  .pwd-cancel {
+    background: #ecf0f1;
+    color: #2c3e50;
+  }
+
+
+
   /* Tablet */
   @media (min-width: 769px) and (max-width: 1024px) {
     .container {

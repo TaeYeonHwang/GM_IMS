@@ -40,7 +40,7 @@ function getLatestTodayOrder() {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     const todayDate = parseInt(year + month + day);
-    Logger.log('Today date: ' + todayDate);
+    Logger.log('Today date: ' + todayDate);  // ✅ 20251114
 
     // ✅ Step 1: Check cache first
     const cached = getCachedData(CACHE_KEYS.LATEST_ORDER);
@@ -88,12 +88,23 @@ function getLatestTodayOrder() {
       }
     });
     
+    // ✅ ADD: Debug logging
+    Logger.log('Total rows in PurchaseOrder: ' + (data.length - 1));
+
     // Find max order index for today
     let maxIndex = -1;
     for (let i = 1; i < data.length; i++) {
       const rowDate = data[i][colIndices['Order_Date']];
       const rowIndex = parseInt(data[i][colIndices['Order_Index']]) || 0;
       
+      // ✅ ADD: Debug first few rows
+      if (i <= 3) {
+        Logger.log('Row ' + i + ' - Date: ' + rowDate + ' (type: ' + typeof rowDate + '), Index: ' + rowIndex);
+        Logger.log('Row ' + i + ' - Parsed date: ' + parseInt(rowDate.toString()) + ', Today: ' + todayDate);
+      }
+
+      // ✅ CHANGED: More robust date comparison
+      const rowDateInt = parseInt(rowDate.toString());
       if (rowDate && parseInt(rowDate.toString()) === todayDate) {
         if (rowIndex > maxIndex) {
           maxIndex = rowIndex;
@@ -101,6 +112,9 @@ function getLatestTodayOrder() {
       }
     }
     
+    // ✅ ADD: Final log
+    Logger.log('Max index found: ' + maxIndex);
+
     // No orders today
     if (maxIndex === -1) {
       const result = {
@@ -861,12 +875,12 @@ function saveOrder(orderData) {
       
       Logger.log(`Order completed - Number: ${orderSerialNumber}, Items: ${orderData.items.length}`);
       
-      // ✅ NEW: Invalidate caches after order creation
-      invalidateCaches([
-        CACHE_KEYS.DASHBOARD_INFO,
-        CACHE_KEYS.INVENTORY_STATUS,
-        CACHE_KEYS.LATEST_ORDER
-      ]);
+      // ✅ NEW: Invalidate server-side caches
+      const cache = CacheService.getScriptCache();
+      cache.remove(CACHE_KEYS.DASHBOARD_INFO);
+      cache.remove(CACHE_KEYS.INVENTORY_STATUS);
+      cache.remove(CACHE_KEYS.LATEST_ORDER);
+      Logger.log('✓ Server caches invalidated: DASHBOARD_INFO, INVENTORY_STATUS, LATEST_ORDER');
 
       return {
         success: true,
@@ -876,7 +890,6 @@ function saveOrder(orderData) {
       };
       
     } catch (saveError) {
-      // 롤백은 어려우므로 에러 로그만 남김
       Logger.log('Error during order save (partial save may have occurred): ' + saveError.toString());
       throw saveError;
     }
@@ -967,12 +980,12 @@ function cancelOrder(orderSerialNumber) {
     
     Logger.log(`Order canceled - Serial: ${orderSerialNumber}, Rows: ${rowsToCancel.length}`);
     
-    // ✅ NEW: Invalidate caches after order cancellation
-    invalidateCaches([
-      CACHE_KEYS.DASHBOARD_INFO,
-      CACHE_KEYS.INVENTORY_STATUS,
-      CACHE_KEYS.LATEST_ORDER
-    ]);
+    // ✅ NEW: Invalidate server-side caches
+    const cache = CacheService.getScriptCache();
+    cache.remove(CACHE_KEYS.DASHBOARD_INFO);
+    cache.remove(CACHE_KEYS.INVENTORY_STATUS);
+    cache.remove(CACHE_KEYS.LATEST_ORDER);
+    Logger.log('✓ Server caches invalidated after cancellation');
 
     return {
       success: true,
@@ -1350,26 +1363,29 @@ function getDashboardInfo() {
   }
 }
 
-function getOrdersByDateRange(startDate, endDate) {
+// Get all order details for a date range (optimized)
+// If startDate === endDate, it queries a single date
+function getOrderDetailsByDateRange(startDate, endDate) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    
     if (!sheet) {
       return {
         success: false,
         message: 'PurchaseOrder sheet not found.'
       };
     }
-
+    
     const data = sheet.getDataRange().getValues();
-
+    
     if (data.length <= 1) {
       return {
         success: true,
-        orders: []
+        orderGroups: []
       };
     }
-
+    
     const headers = data[0];
     const colIndices = {};
     const requiredCols = [
@@ -1378,24 +1394,35 @@ function getOrdersByDateRange(startDate, endDate) {
       'Order_CostB2B', 'Order_CostB2C', 'Order_IsB2B', 'Order_Cnt', 
       'PayType', 'Order_TotalCost', 'IsCanceled'
     ];
-
+    
     requiredCols.forEach(col => {
       const index = headers.indexOf(col);
       if (index !== -1) {
         colIndices[col] = index;
       }
     });
-
+    
     const startDateInt = parseInt(startDate);
     const endDateInt = parseInt(endDate);
-
-    // Collect all orders in date range
-    const ordersMap = {}; // Group by serial number
-
+    
+    // ✅ Collect all orders in date range in one pass
+    const orderGroups = {}; // Group by serial number
+    
     for (let i = 1; i < data.length; i++) {
-      const rowDate = parseInt(data[i][colIndices['Order_Date']]);
+      const rowDate = data[i][colIndices['Order_Date']];
       
-      if (rowDate >= startDateInt && rowDate <= endDateInt) {
+      // Handle both Date objects and numbers
+      let rowDateInt;
+      if (rowDate instanceof Date) {
+        const y = rowDate.getFullYear();
+        const m = String(rowDate.getMonth() + 1).padStart(2, '0');
+        const d = String(rowDate.getDate()).padStart(2, '0');
+        rowDateInt = parseInt(y + m + d);
+      } else {
+        rowDateInt = parseInt(String(rowDate).replace(/[^0-9]/g, ''));
+      }
+      
+      if (rowDateInt >= startDateInt && rowDateInt <= endDateInt) {
         const serialNumber = data[i][colIndices['Order_SerialNumber']].toString();
         
         // Format order time
@@ -1412,7 +1439,7 @@ function getOrdersByDateRange(startDate, endDate) {
         const canceledValue = data[i][colIndices['IsCanceled']];
         const isCanceled = canceledValue === '취소';
         
-        const order = {
+        const orderItem = {
           serialNumber: serialNumber,
           date: data[i][colIndices['Order_Date']],
           time: orderTime,
@@ -1430,49 +1457,54 @@ function getOrdersByDateRange(startDate, endDate) {
         };
         
         // Group by serial number
-        if (!ordersMap[serialNumber]) {
-          ordersMap[serialNumber] = [];
+        if (!orderGroups[serialNumber]) {
+          orderGroups[serialNumber] = [];
         }
-        ordersMap[serialNumber].push(order);
+        orderGroups[serialNumber].push(orderItem);
       }
     }
-
-    // Convert map to array of order groups
-    const orderGroups = [];
-    for (const serialNumber in ordersMap) {
-      const orders = ordersMap[serialNumber];
-      if (orders.length > 0) {
-        orderGroups.push({
-          date: orders[0].date.toString(),
-          index: orders[0].index,
-          orders: orders
-        });
-      }
+    
+    if (Object.keys(orderGroups).length === 0) {
+      return {
+        success: true,
+        orderGroups: []
+      };
     }
-
+    
+    // ✅ Convert to array format sorted by date and index
+    const orderList = [];
+    for (const serialNumber in orderGroups) {
+      const orders = orderGroups[serialNumber];
+      orderList.push({
+        date: orders[0].date.toString(),
+        index: orders[0].index,
+        orders: orders
+      });
+    }
+    
     // Sort by date and index
-    orderGroups.sort((a, b) => {
+    orderList.sort((a, b) => {
       if (a.date !== b.date) {
         return parseInt(a.date) - parseInt(b.date);
       }
       return a.index - b.index;
     });
-
-    Logger.log(`Found ${orderGroups.length} orders in date range ${startDate}-${endDate}`);
-
+    
+    Logger.log(`Found ${orderList.length} orders in date range ${startDate}-${endDate}`);
+    
     return {
       success: true,
-      orderGroups: orderGroups
+      orderGroups: orderList
     };
+    
   } catch (error) {
     Logger.log('Error getting orders by date range: ' + error.toString());
     return {
       success: false,
-      message: 'An error occurred: ' + error.toString()
+      message: '오류가 발생했습니다: ' + error.toString()
     };
   }
 }
-
 
 function getInventoryStatusCountsFromSheet() {
   try {
@@ -1839,6 +1871,40 @@ function getAllCustomers() {
     
   } catch (error) {
     Logger.log('getAllCustomers error: ' + error.toString());
+    return {
+      success: false,
+      message: 'An error occurred: ' + error.toString()
+    };
+  }
+}
+
+// Get management password from script properties
+function checkManagementPassword(inputPassword) {
+  try {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const correctPassword = scriptProperties.getProperty('MANAGE_PW');
+    
+    if (!correctPassword) {
+      return {
+        success: false,
+        message: 'Management password is not set in script properties.'
+      };
+    }
+    
+    if (inputPassword === correctPassword) {
+      return {
+        success: true,
+        message: 'Password correct.'
+      };
+    } else {
+      return {
+        success: false,
+        message: 'Incorrect password.'
+      };
+    }
+    
+  } catch (error) {
+    Logger.log('Error checking management password: ' + error.toString());
     return {
       success: false,
       message: 'An error occurred: ' + error.toString()

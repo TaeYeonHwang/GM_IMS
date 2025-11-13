@@ -305,10 +305,12 @@
     console.log('✗ Frontend cache MISS: latest_order');
     container.innerHTML = '<div class="loading"><div class="spinner"></div><div>직전 주문서 로딩 중...</div></div>';
     
-    console.log('📋 직전 주문서 요청 시작');  // ✅ 추가
+    console.log('📋 직전 주문서 요청 시작');
 
     google.script.run
       .withSuccessHandler(function(result) {
+        console.log('📋 직전 주문서 응답 받음:', result);  // ✅ 추가
+
         // ✅ Frontend 캐시 저장
         latestOrderCache = result;
         latestOrderCacheTime = Date.now();
@@ -332,7 +334,7 @@
       })
       .withFailureHandler(function(error) {
 
-        console.log('📋 직전 주문서 에러:', error);  // ✅ 추가
+        console.log('📋 직전 주문서 에러:', error);
 
         container.innerHTML = `
           <div class="alert alert-error">
@@ -347,6 +349,18 @@
   function displayLatestOrderCard(data) {
     const container = document.getElementById('latestOrderCard');
   
+    // ✅ ADD: Validate data structure
+    if (!data || !data.success || !data.hasOrder) {
+      container.innerHTML = '<div class="latest-order-empty">📭 오늘 생성된 주문서가 없습니다.</div>';
+      return;
+    }
+
+    // ✅ ADD: Validate required fields
+    if (!data.items || data.items.length === 0) {
+      container.innerHTML = '<div class="alert alert-error">주문서 데이터가 올바르지 않습니다.</div>';
+      return;
+    }
+
     const isCanceled = data.isCanceled === true;
     const cardBorder = isCanceled ? 'border: 2px solid #fee2e2; border-left: 5px solid #dc2626;' : 'border: 2px solid #e8ecef; border-left: 5px solid #27ae60;';
     const titleColor = isCanceled ? '#dc2626' : '#27ae60';
@@ -1364,6 +1378,9 @@
     stopOrderQRCamera();
     stopInventoryQRCamera();  // ✅ NEW
     
+    // ✅ Show search section (in case it was hidden)
+    document.querySelector('.inventory-search-section').style.display = 'block';
+  
     // Reset search
     inventorySearchText = '';
     document.getElementById('inventorySearchInput').value = '';
@@ -2182,30 +2199,42 @@
     const day = String(today.getDate()).padStart(2, '0');
     const orderDate = year + month + day;
     
-    // ✅ Add loading message
     showLoadingMessage('오늘 주문서를 조회하는 중...');
 
-    // Search all orders for today
+    // ✅ CHANGED: Use same date for start and end
     google.script.run
       .withSuccessHandler(function(result) {
-        hideLoadingMessage();  // ✅ Hide loading
-
         if (result.success) {
+          if (result.orderGroups.length === 0) {
+            hideLoadingMessage();
+            alert('오늘 주문서가 없습니다.');
+            return;
+          }
+          
           hideAllScreens();
           const s = document.getElementById('orderViewScreen');
           s.style.display = 'block';
           s.classList.add('active');
-          displayOrderList(orderDate, result.orderList);
+          
+          const dateStr = orderDate.toString();
+          const year = dateStr.substring(0, 4);
+          const month = dateStr.substring(4, 6);
+          const day = dateStr.substring(6, 8);
+          const formattedDate = `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`;
+          
+          displayMultipleDateOrders(result.orderGroups, formattedDate);
+          hideLoadingMessage();
           navigateToScreen('orderViewScreen');
         } else {
+          hideLoadingMessage();
           alert(result.message);
         }
       })
       .withFailureHandler(function(error) {
-        hideLoadingMessage();  // ✅ Hide loading on error
+        hideLoadingMessage();
         alert('주문서 조회 중 오류: ' + error);
       })
-      .getOrderListByDate(orderDate);
+      .getOrderDetailsByDateRange(orderDate, orderDate);  // ✅ Same date for both params
   }
 
   function searchOrderWeek() {
@@ -2217,31 +2246,37 @@
     const startDate = monday.getFullYear() + 
                     String(monday.getMonth() + 1).padStart(2, '0') + 
                     String(monday.getDate()).padStart(2, '0');
-  
+
     const endDate = today.getFullYear() + 
                     String(today.getMonth() + 1).padStart(2, '0') + 
                     String(today.getDate()).padStart(2, '0');
     
     showLoadingMessage('이번주 주문서를 조회하는 중...');
 
-    // ✅ Single request for entire week
+    // ✅ CHANGED: Use optimized function
     google.script.run
       .withSuccessHandler(function(result) {
-        hideLoadingMessage();
-        
         if (result.success) {
           if (result.orderGroups.length === 0) {
+            hideLoadingMessage();
             alert('이번주 주문서가 없습니다.');
             return;
           }
           
+          // ✅ Only hide screens and show content when data is ready
           hideAllScreens();
           const s = document.getElementById('orderViewScreen');
           s.style.display = 'block';
           s.classList.add('active');
+          
+          // Display data
           displayMultipleDateOrders(result.orderGroups, '이번주');
+          
+          // ✅ Hide loading AFTER everything is rendered
+          hideLoadingMessage();
           navigateToScreen('orderViewScreen');
         } else {
+          hideLoadingMessage();
           alert(result.message);
         }
       })
@@ -2249,7 +2284,7 @@
         hideLoadingMessage();
         alert('주문서 조회 중 오류: ' + error);
       })
-      .getOrdersByDateRange(startDate, endDate);
+      .getOrderDetailsByDateRange(startDate, endDate);  // ✅ New optimized function
   }
 
   function searchOrderMonth() {
@@ -2260,27 +2295,33 @@
     
     const startDate = year + String(month).padStart(2, '0') + '01';
     const endDate = year + String(month).padStart(2, '0') + String(day).padStart(2, '0');
-  
+
     showLoadingMessage('이번달 주문서를 조회하는 중...');
-  
-    // ✅ Single request for entire month
+
+    // ✅ CHANGED: Use optimized function
     google.script.run
       .withSuccessHandler(function(result) {
-        hideLoadingMessage();
-        
         if (result.success) {
           if (result.orderGroups.length === 0) {
+            hideLoadingMessage();
             alert('이번달 주문서가 없습니다.');
             return;
           }
           
+          // ✅ Only hide screens and show content when data is ready
           hideAllScreens();
           const s = document.getElementById('orderViewScreen');
           s.style.display = 'block';
           s.classList.add('active');
+          
+          // Display data
           displayMultipleDateOrders(result.orderGroups, '이번달');
+          
+          // ✅ Hide loading AFTER everything is rendered
+          hideLoadingMessage();
           navigateToScreen('orderViewScreen');
         } else {
+          hideLoadingMessage();
           alert(result.message);
         }
       })
@@ -2288,7 +2329,7 @@
         hideLoadingMessage();
         alert('주문서 조회 중 오류: ' + error);
       })
-      .getOrdersByDateRange(startDate, endDate);
+      .getOrderDetailsByDateRange(startDate, endDate);  // ✅ New optimized function
   }
 
   function searchOrderCustom() {
@@ -2623,22 +2664,98 @@
   let customerSearchText = '';
   let customerSearchTimeout = null;
 
-  // Show customer screen
+  // Show customer screen with password check
   function showCustomer() {
+    const modal = document.createElement('div');
+    modal.className = 'pwd-modal';
+    modal.innerHTML = `
+      <div class="pwd-box">
+        <h3>🔐 관리자 비밀번호</h3>
+        <input type="password" id="pwdInput" placeholder="비밀번호 입력">
+        <div class="pwd-btns">
+          <button class="pwd-cancel" onclick="this.closest('.pwd-modal').remove()">취소</button>
+          <button class="pwd-ok" onclick="checkPwd()">확인</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    setTimeout(() => {
+      const input = document.getElementById('pwdInput');
+      input.focus();
+      input.onkeypress = (e) => { if(e.key === 'Enter') checkPwd(); };
+    }, 100);
+  }
+
+  // ===== NEW: Show shortage inventory =====
+  function showShortageInventory() {
     hideAllScreens();
-    const s = document.getElementById('customerScreen');
+    const s = document.getElementById('listScreen');
     s.style.display = 'block';
     s.classList.add('active');
     stopOrderQRCamera();
+    stopInventoryQRCamera();
     
-    // Reset search
-    customerSearchText = '';
-    document.getElementById('customerSearchInput').value = '';
-    document.getElementById('customerSearchInfo').innerHTML = '<div class="loading-dot">로딩 중...</div>';
+    // ✅ Hide search section
+    document.querySelector('.inventory-search-section').style.display = 'none';
+  
+    // Show loading
+    showLoading('itemList');
     
-    loadAllCustomers();
+    // Load all items and filter
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          allInventoryItems = result.items;
+          
+          // ✅ Filter: only shortage items (IsShortage === 0 or 1)
+          const shortageItems = allInventoryItems.filter(item => 
+            item.isShortage === 0 || item.isShortage === 1
+          );
+          
+          if (shortageItems.length === 0) {
+            document.getElementById('itemList').innerHTML = '<div class="alert alert-info">품절 및 품절 임박 재고가 없습니다. 👍</div>';
+            updateInventorySearchInfo(0, allInventoryItems.length);
+          } else {
+            renderInventoryItems(shortageItems);
+            updateInventorySearchInfo(shortageItems.length, allInventoryItems.length);
+          }
+        } else {
+          showError('itemList', result.message);
+        }
+      })
+      .withFailureHandler(e => showError('itemList', '목록 로드 오류: ' + e))
+      .getAllItems();
 
-    navigateToScreen('customerScreen');
+    navigateToScreen('listScreen');
+  }
+
+  function checkPwd() {
+    const pwd = document.getElementById('pwdInput').value;
+    if (!pwd) {
+      alert('비밀번호를 입력하세요');
+      return;
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(r) {
+        if (r.success) {
+          document.querySelector('.pwd-modal').remove();
+          hideAllScreens();
+          const s = document.getElementById('customerScreen');
+          s.style.display = 'block';
+          s.classList.add('active');
+          customerSearchText = '';
+          document.getElementById('customerSearchInput').value = '';
+          loadAllCustomers();
+          navigateToScreen('customerScreen');
+        } else {
+          alert('❌ 비밀번호가 틀렸습니다');
+          document.getElementById('pwdInput').value = '';
+          document.getElementById('pwdInput').focus();
+        }
+      })
+      .checkManagementPassword(pwd);
   }
 
   // Load all customers
@@ -2794,6 +2911,25 @@
     document.getElementById('totalReceivedPrice').textContent = totalReceived.toLocaleString() + '원';
     document.getElementById('totalNonReceivedPrice').textContent = totalNonReceived.toLocaleString() + '원';
   }
+
+  // Enable keyboard input
+  function enableKeyboardInput() {
+    const input = document.getElementById('orderSearchInput');
+    input.removeAttribute('inputmode');
+    input.focus();
+    
+    showOrderMessage('💡 키보드로 코드 번호를 입력할 수 있습니다.', 'info');
+    
+    // Reset inputmode after input is used
+    input.onblur = function() {
+      setTimeout(() => {
+        if (input.value === '') {
+          input.setAttribute('inputmode', 'none');
+        }
+      }, 100);
+    };
+  }
+
 
 
 </script>
