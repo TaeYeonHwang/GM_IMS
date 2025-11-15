@@ -1,6 +1,8 @@
 // 구글시트 설정 값 가져오기.
 // Code.gs
 
+// For git Test
+
 const RECEIPT_TEMPLATE = 'ReceiptTemplate_2'; // 'ReceiptTemplate' 또는 'ReceiptTemplate_2'
 
 function getConfig() {
