@@ -1,8 +1,6 @@
 // 구글시트 설정 값 가져오기.
 // Code.gs
 
-// For git Test
-
 const RECEIPT_TEMPLATE = 'ReceiptTemplate_2'; // 'ReceiptTemplate' 또는 'ReceiptTemplate_2'
 
 function getConfig() {
@@ -18,6 +16,7 @@ const config = getConfig();
 const SPREADSHEET_ID = config.SPREADSHEET_ID;
 const SHEET_NAME = 'ItemInfo';
 const LOG_SHEET_NAME = 'AccessLog';
+const SALES_ORDER_SHEET_NAME = 'SalesOrder';
 const PURCHASE_ORDER_SHEET_NAME = 'PurchaseOrder';
 
 // ===== Cache Service Utility Functions =====
@@ -55,12 +54,12 @@ function getLatestTodayOrder() {
     Logger.log('✗ Cache miss - fetching latest order from DB');
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const orderSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    const orderSheet = ss.getSheetByName(SALES_ORDER_SHEET_NAME);
     
     if (!orderSheet) {
       return {
         success: false,
-        message: 'PurchaseOrder sheet not found.'
+        message: 'SalesOrder sheet not found.'
       };
     }
     
@@ -91,7 +90,7 @@ function getLatestTodayOrder() {
     });
     
     // ✅ ADD: Debug logging
-    Logger.log('Total rows in PurchaseOrder: ' + (data.length - 1));
+    Logger.log('Total rows in SalesOrder: ' + (data.length - 1));
 
     // Find max order index for today
     let maxIndex = -1;
@@ -683,12 +682,12 @@ function getNewOrderIndex(orderDate) {
 function getOrderData(orderDate, orderIndex) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    let sheet = ss.getSheetByName(SALES_ORDER_SHEET_NAME);
     
     if (!sheet) {
       return {
         success: false,
-        message: 'PurchaseOrder sheet not found.'
+        message: 'SalesOrder sheet not found.'
       };
     }
     
@@ -783,7 +782,7 @@ function getOrderData(orderDate, orderIndex) {
 function saveOrder(orderData) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const purchaseSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    const purchaseSheet = ss.getSheetByName(SALES_ORDER_SHEET_NAME);
     const itemSheet = ss.getSheetByName(SHEET_NAME);
     
     if (!purchaseSheet || !itemSheet) {
@@ -909,7 +908,7 @@ function saveOrder(orderData) {
 function cancelOrder(orderSerialNumber) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const purchaseSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    const purchaseSheet = ss.getSheetByName(SALES_ORDER_SHEET_NAME);
     const itemSheet = ss.getSheetByName(SHEET_NAME);
     
     if (!purchaseSheet || !itemSheet) {
@@ -1009,12 +1008,12 @@ function cancelOrder(orderSerialNumber) {
 function getOrderListByDate(orderDate) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    let sheet = ss.getSheetByName(SALES_ORDER_SHEET_NAME);
     
     if (!sheet) {
       return {
         success: false,
-        message: 'PurchaseOrder 시트를 찾을 수 없습니다.'
+        message: 'SalesOrder 시트를 찾을 수 없습니다.'
       };
     }
     
@@ -1330,7 +1329,7 @@ function getDashboardInfo() {
       };
     }
 
-    // ✅ 개선점 1: Dashboard B5에서 오늘 주문 수를 바로 읽음 (PurchaseOrder 전체 스캔 X)
+    // ✅ 개선점 1: Dashboard B5에서 오늘 주문 수를 바로 읽음 (SalesOrder 전체 스캔 X)
     const orderCount = dashboardSheet.getRange('B5').getValue() || 0;
     
     // ✅ 개선점 2: Dashboard B2~B4에서 재고 상태를 바로 읽음 (ItemInfo 전체 스캔 X)
@@ -1346,7 +1345,7 @@ function getDashboardInfo() {
     
     const result = {
       success: true,
-      todayDate: `${year}년 ${month}월 ${day}일`,
+      todayDate: `${String(year).slice(-2)}년 ${month}월 ${day}일`,
       orderCount: orderCount,
       stockStatus: stockStatus
     };
@@ -1370,12 +1369,12 @@ function getDashboardInfo() {
 function getOrderDetailsByDateRange(startDate, endDate) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    const sheet = ss.getSheetByName(SALES_ORDER_SHEET_NAME);
     
     if (!sheet) {
       return {
         success: false,
-        message: 'PurchaseOrder sheet not found.'
+        message: 'SalesOrder sheet not found.'
       };
     }
     
@@ -1566,9 +1565,9 @@ function generateReceiptPDF(orderSerialNumber) {
     }
     
     // Get order data
-    const orderSheet = ss.getSheetByName(PURCHASE_ORDER_SHEET_NAME);
+    const orderSheet = ss.getSheetByName(SALES_ORDER_SHEET_NAME);
     if (!orderSheet) {
-      return { success: false, message: 'PurchaseOrder sheet not found.' };
+      return { success: false, message: 'SalesOrder sheet not found.' };
     }
     
     const data = orderSheet.getDataRange().getValues();

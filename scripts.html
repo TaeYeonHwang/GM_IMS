@@ -726,44 +726,6 @@
       .cancelOrder(orderSerialNumber);
   }
 
-  function displayOrderList(orderDate, orderList) {
-    const dateStr = orderDate.toString();
-    const year = dateStr.substring(0, 4);
-    const month = dateStr.substring(4, 6);
-    const day = dateStr.substring(6, 8);
-    const formattedDate = `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`;
-    
-    // ✅ 모든 주문서 데이터 한번에 가져오기
-    let loadedCount = 0;
-    const allOrders = [];
-    
-    orderList.forEach(index => {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          loadedCount++;
-          
-          if (result.success) {
-            allOrders.push({
-              index: index,
-              orders: result.orders
-            });
-          }
-          
-          // 모든 주문서 로드 완료
-          if (loadedCount === orderList.length) {
-            // 인덱스 순서대로 정렬
-            allOrders.sort((a, b) => a.index - b.index);
-            displayAllOrders(orderDate, formattedDate, allOrders);
-          }
-        })
-        .withFailureHandler(function(error) {
-          loadedCount++;
-          console.error(`주문서 #${index} 조회 실패:`, error);
-        })
-        .getOrderData(orderDate, index);
-    });
-  }
-
   function displayAllOrders(orderDate, formattedDate, allOrders) {
     let totalAmount = 0;
     let totalItems = 0;
@@ -937,18 +899,36 @@
           if (document.getElementById('orderMainScreen').classList.contains('active')) {
             loadLatestOrderCard();
           } else {
-            // ✅ 목록 화면이면 목록 새로고침
+            // ✅ CHANGED: Use optimized function instead of N+1
+            showLoadingMessage('주문서 목록을 새로고침하는 중...');
+            
             google.script.run
               .withSuccessHandler(function(listResult) {
-                if (listResult.success) {
+                hideLoadingMessage();
+                
+                if (listResult.success && listResult.orderGroups.length > 0) {
                   hideAllScreens();
                   const s = document.getElementById('orderViewScreen');
                   s.style.display = 'block';
                   s.classList.add('active');
-                  displayOrderList(orderDate, listResult.orderList);
+                  
+                  const dateStr = orderDate.toString();
+                  const year = dateStr.substring(0, 4);
+                  const month = dateStr.substring(4, 6);
+                  const day = dateStr.substring(6, 8);
+                  const formattedDate = `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`;
+                  
+                  displayMultipleDateOrders(listResult.orderGroups, formattedDate);
+                } else {
+                  alert('취소 후 조회할 주문서가 없습니다.');
+                  showOrderMain();
                 }
               })
-              .getOrderListByDate(orderDate);
+              .withFailureHandler(function(error) {
+                hideLoadingMessage();
+                alert('주문서 목록 새로고침 중 오류: ' + error);
+              })
+              .getOrderDetailsByDateRange(orderDate, orderDate);  // ✅ Single API call
           }
         } else {
           alert('주문 취소 실패:\n' + result.message);
@@ -2347,28 +2327,41 @@
     
     // 주문서 번호가 비어있으면 전체 조회
     if (!orderIndexInput || orderIndexInput === '') {
-      // ✅ Add loading message for list query
+      // ✅ CHANGED: Use optimized function - single API call instead of N+1
       showLoadingMessage('주문서를 조회하는 중...');
 
       google.script.run
         .withSuccessHandler(function(result) {
-          hideLoadingMessage();  // ✅ Hide loading
+          hideLoadingMessage();
           if (result.success) {
+            if (result.orderGroups.length === 0) {
+              alert('해당 날짜의 주문서가 없습니다.');
+              return;
+            }
+            
             hideAllScreens();
             const s = document.getElementById('orderViewScreen');
             s.style.display = 'block';
             s.classList.add('active');
-            displayOrderList(orderDate, result.orderList);
+            
+            const dateStr = orderDate.toString();
+            const year = dateStr.substring(0, 4);
+            const month = dateStr.substring(4, 6);
+            const day = dateStr.substring(6, 8);
+            const formattedDate = `${year}년 ${parseInt(month)}월 ${parseInt(day)}일`;
+            
+            // ✅ Use displayMultipleDateOrders instead of displayOrderList
+            displayMultipleDateOrders(result.orderGroups, formattedDate);
             navigateToScreen('orderViewScreen');
           } else {
             alert(result.message);
           }
         })
         .withFailureHandler(function(error) {
-          hideLoadingMessage();  // ✅ Hide loading on error
+          hideLoadingMessage();
           alert('주문서 목록 조회 중 오류: ' + error);
         })
-        .getOrderListByDate(orderDate);
+        .getOrderDetailsByDateRange(orderDate, orderDate);  // ✅ Same date for single day
     } else {
       // 개별 조회
       const orderIndex = parseInt(orderIndexInput);
@@ -2912,23 +2905,37 @@
     document.getElementById('totalNonReceivedPrice').textContent = totalNonReceived.toLocaleString() + '원';
   }
 
-  // Enable keyboard input
-  function enableKeyboardInput() {
-    const input = document.getElementById('orderSearchInput');
-    input.removeAttribute('inputmode');
-    input.focus();
+  // ===== NEW: Toggle keyboard input with button state =====
+let isKeyboardEnabled = false;
+
+function enableKeyboardInput() {
+  const input = document.getElementById('orderSearchInput');
+  const button = event.target.closest('button');
+  
+  if (isKeyboardEnabled) {
+    // 키보드 비활성화
+    input.setAttribute('inputmode', 'none');
+    isKeyboardEnabled = false;
+    button.textContent = '⌨️ 키보드 활성화';
+    showOrderMessage('🔒 키보드가 비활성화되었습니다.', 'info');
     
+    // ✅ Keep focus on input even when keyboard is disabled
+    input.focus();
+
+    // Remove blur event listener
+    input.onblur = null;
+  } else {
+    // 키보드 활성화
+    input.removeAttribute('inputmode');
+    isKeyboardEnabled = true;
+    button.textContent = '🔓 키보드 비활성화';
+    input.focus();
     showOrderMessage('💡 키보드로 코드 번호를 입력할 수 있습니다.', 'info');
     
-    // Reset inputmode after input is used
-    input.onblur = function() {
-      setTimeout(() => {
-        if (input.value === '') {
-          input.setAttribute('inputmode', 'none');
-        }
-      }, 100);
-    };
+    // No auto-disable on blur when manually toggled
+    input.onblur = null;
   }
+}
 
 
 
